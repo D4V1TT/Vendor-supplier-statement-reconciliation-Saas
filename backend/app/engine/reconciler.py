@@ -149,6 +149,27 @@ def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
     df["invoice_id"] = df["invoice_id"].astype(str).str.strip().str.upper()
     df["amount"]     = pd.to_numeric(df["amount"], errors="coerce")
 
+    # ── Drop summary / total rows (false exceptions otherwise) ────────────────
+    # These commonly appear at the bottom of statements: TOTAL, SUBTOTAL,
+    # BALANCE C/F, GRAND TOTAL, AMOUNT DUE, etc.
+    summary_keywords = (
+        "TOTAL", "SUBTOTAL", "SUB TOTAL", "BALANCE", "GRAND TOTAL",
+        "AMOUNT DUE", "SUM", "OPENING", "CLOSING", "CARRIED FORWARD",
+        "BROUGHT FORWARD", "C/F", "B/F", "TOTALS",
+    )
+    before = len(df)
+    is_summary = df["invoice_id"].str.upper().str.strip().isin(summary_keywords) | \
+                 df["invoice_id"].str.upper().str.contains(
+                     r"\b(?:TOTAL|SUBTOTAL|CARRIED\s+FORWARD|BROUGHT\s+FORWARD)\b",
+                     regex=True, na=False,
+                 )
+    df = df[~is_summary]
+    if before - len(df):
+        logger.info("%s: dropped %d summary/total row(s).", source, before - len(df))
+
+    # Drop rows with blank/NaN invoice IDs
+    df = df[df["invoice_id"].str.strip().ne("") & df["invoice_id"].ne("NAN")]
+
     null_amounts = df["amount"].isna().sum()
     if null_amounts:
         logger.warning("%s: %d rows with unparseable amounts will be skipped.", source, null_amounts)
@@ -314,6 +335,117 @@ def reconcile(
     return ReconciliationReport(summary=summary, line_items=line_items)
 
 
+# ── Robust File Readers ───────────────────────────────────────────────────────
+
+def _detect_delimiter(sample: str) -> str:
+    """
+    Sniff the most likely delimiter from a text sample.
+    Falls back to counting candidate chars if csv.Sniffer fails.
+    """
+    import csv  # noqa: PLC0415
+
+    candidates = [",", "\t", ";", "|"]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters="".join(candidates))
+        return dialect.delimiter
+    except Exception:
+        # Count occurrences across lines — most frequent consistent char wins
+        counts = {d: sample.count(d) for d in candidates}
+        return max(counts, key=counts.get) if any(counts.values()) else ","
+
+
+def _find_header_row(lines: list[str], delimiter: str) -> int:
+    """
+    Find the index of the real header row, skipping any title/preamble lines.
+
+    Heuristic: the header is the first line that
+      (a) splits into >= 2 fields on the delimiter, AND
+      (b) is followed by a line with the SAME number of fields.
+    This skips single-cell title banners like "ACME MOTORS — STATEMENT".
+    """
+    field_counts = [len(line.split(delimiter)) for line in lines]
+
+    for i in range(len(lines) - 1):
+        if field_counts[i] >= 2 and field_counts[i] == field_counts[i + 1]:
+            return i
+    # Fallback: first line that has more than one field
+    for i, fc in enumerate(field_counts):
+        if fc >= 2:
+            return i
+    return 0
+
+
+def _read_delimited_robust(file_bytes: bytes, filename_lower: str) -> pd.DataFrame:
+    """
+    Parse a CSV/TSV/TXT that may contain:
+      - a title/preamble line before the table
+      - blank lines
+      - ragged rows (trailing totals with fewer/more columns)
+    """
+    import io  # noqa: PLC0415
+
+    text = file_bytes.decode("utf-8-sig", errors="ignore")
+    # Normalise line endings, drop fully blank lines
+    raw_lines = [ln for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    non_blank = [ln for ln in raw_lines if ln.strip()]
+    if not non_blank:
+        raise ValueError("File appears to be empty.")
+
+    # Pick delimiter: honour extension hint, else sniff
+    if filename_lower.endswith(".tsv"):
+        delimiter = "\t"
+    else:
+        delimiter = _detect_delimiter("\n".join(non_blank[:20]))
+
+    # Locate the real header row (skip preamble banners)
+    header_idx = _find_header_row(non_blank, delimiter)
+    table_text = "\n".join(non_blank[header_idx:])
+
+    # Parse with the python engine (more tolerant) and skip bad lines
+    df = pd.read_csv(
+        io.StringIO(table_text),
+        sep=delimiter,
+        engine="python",
+        skip_blank_lines=True,
+        on_bad_lines="skip",        # drop ragged rows instead of crashing
+        dtype=str,                   # read everything as string; typing happens later
+    )
+
+    # Drop entirely-empty columns (common with trailing delimiters)
+    df = df.dropna(axis=1, how="all")
+    # Drop unnamed junk columns produced by trailing separators
+    df = df.loc[:, ~df.columns.astype(str).str.match(r"^Unnamed")]
+
+    if df.empty or len(df.columns) < 2:
+        raise ValueError(
+            "Could not identify a valid data table in the file. "
+            "Ensure it has a header row with at least an invoice ID and amount column."
+        )
+
+    return df
+
+
+def _read_excel_robust(buffer, engine: str) -> pd.DataFrame:
+    """
+    Read Excel, auto-skipping leading title rows.
+    Finds the first row where >= 2 cells are non-empty and treats it as header.
+    """
+    # First read with no header to locate the real header row
+    preview = pd.read_excel(buffer, engine=engine, header=None, nrows=15)
+    header_row = 0
+    for i in range(len(preview)):
+        non_empty = preview.iloc[i].notna().sum()
+        if non_empty >= 2:
+            header_row = i
+            break
+
+    buffer.seek(0)
+    df = pd.read_excel(buffer, engine=engine, header=header_row)
+    df = df.dropna(axis=1, how="all")
+    df = df.loc[:, ~df.columns.astype(str).str.match(r"^Unnamed")]
+    return df
+
+
 # ── Ledger Parser (CSV / Excel) ───────────────────────────────────────────────
 
 def parse_ledger_file(
@@ -330,25 +462,16 @@ def parse_ledger_file(
 
     If not supplied we attempt auto-detection via _HEADER_ALIASES.
     """
-    from app.engine.pdf_extractor import _normalise_headers  # reuse alias table  # noqa: PLC0415
-
     import io  # noqa: PLC0415
 
     filename_lower = filename.lower()
 
     if filename_lower.endswith((".xlsx", ".xls")):
-        df = pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
+        df = _read_excel_robust(io.BytesIO(file_bytes), engine="openpyxl")
     elif filename_lower.endswith((".ods",)):
-        df = pd.read_excel(io.BytesIO(file_bytes), engine="odf")
-    elif filename_lower.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(file_bytes))
-    elif filename_lower.endswith(".tsv"):
-        df = pd.read_csv(io.BytesIO(file_bytes), sep="\t")
-    elif filename_lower.endswith(".txt"):
-        # Auto-detect delimiter: try tab first, fall back to comma
-        sample = file_bytes[:2048].decode("utf-8", errors="ignore")
-        sep = "\t" if sample.count("\t") > sample.count(",") else ","
-        df = pd.read_csv(io.BytesIO(file_bytes), sep=sep)
+        df = _read_excel_robust(io.BytesIO(file_bytes), engine="odf")
+    elif filename_lower.endswith((".csv", ".tsv", ".txt")):
+        df = _read_delimited_robust(file_bytes, filename_lower)
     else:
         raise ValueError(
             f"Unsupported file format: '{filename}'. "
