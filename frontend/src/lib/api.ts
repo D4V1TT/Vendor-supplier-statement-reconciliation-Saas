@@ -137,6 +137,15 @@ export const api = {
   listJobs: () =>
     request<JobListItem[]>("/jobs"),
 
+  getCompany: () =>
+    request<{ id: string; name: string; slug: string }>("/company"),
+
+  updateCompany: (name: string) =>
+    request<{ id: string; name: string; slug: string }>("/company", {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+    }),
+
   getExportUrl: (jobId: string) =>
     `${BASE}/jobs/${jobId}/export/xlsx`,
 

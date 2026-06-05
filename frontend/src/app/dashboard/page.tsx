@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, type ExceptionsReport } from "@/lib/api";
 import { Sidebar }          from "@/components/Sidebar";
 import { AuthGuard }        from "@/components/AuthGuard";
@@ -36,6 +37,18 @@ export default function DashboardPage() {
   const [report, setReport] = useState<ExceptionsReport | null>(null);
   const [activeTab, setActiveTab] = useState<"exceptions" | "matched">("exceptions");
   const [downloading, setDownloading] = useState(false);
+
+  const router = useRouter();
+
+  // ── Load a report when arriving from History (?job=<id>) ──────────────────
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get("job");
+    if (!jobId) return;
+    setStage("matching");   // show spinner while we fetch
+    api.getReport(jobId)
+      .then(rpt => { setReport(rpt); setStage("done"); })
+      .catch(err => { setError(err.message ?? "Could not load report."); setStage("error"); });
+  }, []);
 
   // Files
   const [statementFile, setStatementFile] = useState<File | null>(null);
@@ -135,6 +148,7 @@ export default function DashboardPage() {
     setStatementFile(null); setLedgerFile(null); setVendorName("");
     setStmtDetection(null); setLedgerDetection(null);
     setStmtMapping(null); setLedgerMapping(null); setMappingTarget(null);
+    router.replace("/dashboard");   // clear ?job= param
   };
 
   const s = report?.summary;

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthGuard } from "@/components/AuthGuard";
+import { api } from "@/lib/api";
 
 // ── Reusable field layout ─────────────────────────────────────────────────────
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
@@ -94,15 +95,19 @@ export default function SettingsPage() {
   const [autoExport,      setAutoExport]      = useState(false);
   const [flagCredits,     setFlagCredits]     = useState(true);
 
-  // Seed real values from Clerk on load
+  // Seed profile from Clerk on load
   useEffect(() => {
     if (!isLoaded || !user) return;
     setFullName(user.fullName ?? user.firstName ?? "");
     setEmail(user.primaryEmailAddress?.emailAddress ?? "");
-    // Use organisation name if available, else derive from email domain
-    const domain = user.primaryEmailAddress?.emailAddress?.split("@")[1]?.split(".")[0] ?? "";
-    setCompanyName(domain ? domain.charAt(0).toUpperCase() + domain.slice(1) : "My Company");
   }, [isLoaded, user]);
+
+  // Load the real company name from our backend (Company table)
+  useEffect(() => {
+    api.getCompany()
+      .then(c => setCompanyName(c.name))
+      .catch(() => { /* leave blank if not reachable yet */ });
+  }, []);
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -118,6 +123,10 @@ export default function SettingsPage() {
       if (newPassword.length >= 8) {
         await user?.updatePassword({ newPassword });
         setNewPassword("");
+      }
+      // Persist company name to our backend (used on exported reports)
+      if (companyName.trim()) {
+        await api.updateCompany(companyName.trim());
       }
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 2500);

@@ -15,6 +15,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.security import encrypt_file
 from app.core.storage import write_file
 from app.db.models.models import (
+    Company,
     JobStatus,
     LedgerExport,
     ReconciliationJob,
@@ -35,6 +36,38 @@ from app.schemas.api_schemas import (
 from app.workers.tasks import enqueue_reconciliation_job
 
 router = APIRouter(tags=["reconciliation"])
+
+
+# ── Company Settings ──────────────────────────────────────────────────────────
+
+@router.get("/company")
+async def get_company(
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Return the current user's company details."""
+    company = await db.get(Company, current_user.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return {"id": str(company.id), "name": company.name, "slug": company.slug}
+
+
+@router.put("/company")
+async def update_company(
+    payload:      dict,
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Update the company name (shown on exported reports)."""
+    company = await db.get(Company, current_user.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    name = (payload.get("name") or "").strip()
+    if name:
+        company.name = name
+        await db.commit()
+        await db.refresh(company)
+    return {"id": str(company.id), "name": company.name, "slug": company.slug}
 
 
 # ── File Uploads ───────────────────────────────────────────────────────────────
@@ -278,7 +311,23 @@ async def export_xlsx(
     if job.status != JobStatus.COMPLETED or not job.line_items:
         raise HTTPException(status_code=409, detail="Job not completed.")
 
-    df_all        = pd.DataFrame(job.line_items)
+    df_all = pd.DataFrame(job.line_items)
+
+    # ── Ensure numeric columns are real numbers (0 for blanks) ────────────────
+    # variance is None for missing/credit rows — Excel should show 0, not blank,
+    # so the column stays fully numeric and is safe to SUM/filter in Excel.
+    numeric_cols = ["supplier_amount", "ledger_amount", "variance", "balance_due"]
+    for col in numeric_cols:
+        if col in df_all.columns:
+            df_all[col] = pd.to_numeric(df_all[col], errors="coerce").fillna(0.0)
+
+    # Order columns logically for the report
+    preferred = ["invoice_id", "invoice_date", "category", "supplier_amount",
+                 "ledger_amount", "variance", "balance_due", "notes"]
+    ordered = [c for c in preferred if c in df_all.columns] + \
+              [c for c in df_all.columns if c not in preferred]
+    df_all = df_all[ordered]
+
     df_exceptions = df_all[df_all["category"] != "Matched"]
     df_matched    = df_all[df_all["category"] == "Matched"]
 
@@ -286,11 +335,22 @@ async def export_xlsx(
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_exceptions.to_excel(writer, sheet_name="Exceptions", index=False)
         df_matched.to_excel(writer, sheet_name="Matched", index=False)
+        # Apply number formatting + column widths
+        money_format = "#,##0.00"
+        money_cols = {"supplier_amount", "ledger_amount", "variance", "balance_due"}
         for sheet_name in writer.sheets:
             ws = writer.sheets[sheet_name]
-            for col in ws.columns:
-                width = max(len(str(cell.value or "")) for cell in col)
-                ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
+            headers = [c.value for c in ws[1]]
+            for idx, header in enumerate(headers, start=1):
+                letter = ws.cell(row=1, column=idx).column_letter
+                # Width
+                col_cells = ws[letter]
+                width = max(len(str(c.value or "")) for c in col_cells)
+                ws.column_dimensions[letter].width = min(width + 2, 40)
+                # Number format for money columns
+                if header in money_cols:
+                    for cell in col_cells[1:]:       # skip header row
+                        cell.number_format = money_format
 
     buffer.seek(0)
     return StreamingResponse(
