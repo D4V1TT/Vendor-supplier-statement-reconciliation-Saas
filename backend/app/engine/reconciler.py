@@ -318,15 +318,28 @@ def parse_ledger_file(
     """
     from app.engine.pdf_extractor import _normalise_headers  # reuse alias table  # noqa: PLC0415
 
+    import io  # noqa: PLC0415
+
     filename_lower = filename.lower()
 
     if filename_lower.endswith((".xlsx", ".xls")):
-        df = pd.read_excel(file_bytes, engine="openpyxl")
+        df = pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
+    elif filename_lower.endswith((".ods",)):
+        df = pd.read_excel(io.BytesIO(file_bytes), engine="odf")
     elif filename_lower.endswith(".csv"):
-        import io  # noqa: PLC0415
         df = pd.read_csv(io.BytesIO(file_bytes))
+    elif filename_lower.endswith(".tsv"):
+        df = pd.read_csv(io.BytesIO(file_bytes), sep="\t")
+    elif filename_lower.endswith(".txt"):
+        # Auto-detect delimiter: try tab first, fall back to comma
+        sample = file_bytes[:2048].decode("utf-8", errors="ignore")
+        sep = "\t" if sample.count("\t") > sample.count(",") else ","
+        df = pd.read_csv(io.BytesIO(file_bytes), sep=sep)
     else:
-        raise ValueError(f"Unsupported ledger file format: {filename}. Expected CSV or XLSX.")
+        raise ValueError(
+            f"Unsupported file format: '{filename}'. "
+            "Accepted formats: PDF, XLSX, XLS, CSV, TSV, TXT, ODS."
+        )
 
     # Apply user-supplied mapping first, then auto-detect the rest
     if column_mapping:

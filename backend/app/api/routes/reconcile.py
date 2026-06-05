@@ -73,10 +73,22 @@ async def upload_statement(
     storage_key = f"statements/{current_user.company_id}/{uuid.uuid4()}/{file.filename}"
     await write_file(storage_key, encrypted)
 
-    # Run extraction synchronously — for large PDFs this could be offloaded too
+    # Route to the correct extractor based on file type
+    fname_lower = file.filename.lower()
     try:
-        result = extract_statement(raw_bytes)
-    except RuntimeError as exc:
+        if fname_lower.endswith(".pdf"):
+            result = extract_statement(raw_bytes)
+            extracted_data  = {"line_items": [li.model_dump(mode="json") for li in result.line_items]}
+            confidence      = result.confidence
+            method          = result.method
+        else:
+            # Excel / CSV / TXT / TSV / ODS vendor statements
+            from app.engine.reconciler import parse_ledger_file  # noqa: PLC0415
+            df = parse_ledger_file(raw_bytes, file.filename)
+            extracted_data  = {"line_items": df.to_dict(orient="records")}
+            confidence      = 1.0
+            method          = "tabular"
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     record = UploadedStatement(
@@ -87,9 +99,9 @@ async def upload_statement(
         storage_key=storage_key,
         file_size_bytes=len(raw_bytes),
         page_count=None,
-        extracted_data={"line_items": [li.model_dump(mode="json") for li in result.line_items]},
-        extraction_confidence=result.confidence,
-        extraction_method=result.method,
+        extracted_data=extracted_data,
+        extraction_confidence=confidence,
+        extraction_method=method,
     )
     db.add(record)
     await db.commit()

@@ -124,7 +124,7 @@ export default function DashboardPage() {
                 <input
                   ref={statementRef}
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.xlsx,.xls,.csv,.txt,.tsv,.ods"
                   className="w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-indigo-700 file:text-xs file:font-semibold hover:file:bg-indigo-100"
                   required
                 />
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                 <input
                   ref={ledgerRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv,.xlsx,.xls,.txt,.tsv,.ods"
                   className="w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-indigo-700 file:text-xs file:font-semibold hover:file:bg-indigo-100"
                   required
                 />
