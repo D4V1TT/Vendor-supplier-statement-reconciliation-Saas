@@ -9,6 +9,7 @@ import { KpiCard }          from "@/components/KpiCard";
 import { ExceptionsTable }  from "@/components/ExceptionsTable";
 import { ProgressStepper, type StepId } from "@/components/ProgressStepper";
 import { ColumnMapper, type DetectionResult } from "@/components/ColumnMapper";
+import { MatchedTable }    from "@/components/MatchedTable";
 
 type Stage = "idle" | "detecting" | "mapping" | "uploading" | "extracting" | "matching" | "done" | "error";
 
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [error,  setError]  = useState<string | null>(null);
   const [report, setReport] = useState<ExceptionsReport | null>(null);
   const [activeTab, setActiveTab] = useState<"exceptions" | "matched">("exceptions");
+  const [downloading, setDownloading] = useState(false);
 
   // Files
   const [statementFile, setStatementFile] = useState<File | null>(null);
@@ -285,10 +287,20 @@ export default function DashboardPage() {
                     </button>
                   ))}
                 </div>
-                <a href={api.getExportUrl(report.job_id)}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors">
-                  {Icons.download} Export Excel
-                </a>
+                <button
+                  onClick={async () => {
+                    setDownloading(true);
+                    try { await api.downloadExport(report.job_id, vendorName); }
+                    catch (e: any) { setError(e.message ?? "Export failed"); }
+                    finally { setDownloading(false); }
+                  }}
+                  disabled={downloading}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-wait">
+                  {downloading
+                    ? <><span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Exporting…</>
+                    : <>{Icons.download} Export Excel</>
+                  }
+                </button>
               </div>
 
               {activeTab === "exceptions" && (
@@ -312,18 +324,7 @@ export default function DashboardPage() {
               )}
 
               {activeTab === "matched" && (
-                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-fade-up">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">{Icons.check}</div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">Matched Lines</p>
-                      <p className="text-xs text-slate-400">{s.count_matched} invoice{s.count_matched !== 1 ? "s" : ""} matched exactly</p>
-                    </div>
-                  </div>
-                  <div className="px-5 py-8 text-center text-sm text-slate-400">
-                    Fetch via <code className="bg-slate-100 rounded px-1 text-slate-500">GET /api/jobs/{report.job_id}/matched</code>
-                  </div>
-                </div>
+                <MatchedTable jobId={report.job_id} matchedCount={s.count_matched} />
               )}
             </>
           )}

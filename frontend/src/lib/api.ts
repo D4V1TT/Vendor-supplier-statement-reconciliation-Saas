@@ -131,9 +131,36 @@ export const api = {
   getReport: (jobId: string) =>
     request<ExceptionsReport>(`/jobs/${jobId}/report`),
 
+  getMatched: (jobId: string, page = 1, pageSize = 100) =>
+    request<LineItem[]>(`/jobs/${jobId}/matched?page=${page}&page_size=${pageSize}`),
+
   listJobs: () =>
     request<JobListItem[]>("/jobs"),
 
   getExportUrl: (jobId: string) =>
     `${BASE}/jobs/${jobId}/export/xlsx`,
+
+  /**
+   * Downloads the Excel report with the auth token attached, then triggers
+   * a browser "Save As" via an in-memory blob. A plain <a href> can't be used
+   * because it wouldn't carry the Authorization header.
+   */
+  downloadExport: async (jobId: string, vendorName?: string) => {
+    const headers = await authHeader();
+    const res = await fetch(`${BASE}/jobs/${jobId}/export/xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.detail ?? `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const url  = window.URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    const safeName = (vendorName ?? "reconciliation").replace(/[^\w\-]+/g, "_");
+    a.download = `${safeName}_exceptions_${jobId.slice(0, 8)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };
