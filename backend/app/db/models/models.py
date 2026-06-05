@@ -80,11 +80,12 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     company_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
     )
-    email: Mapped[str]           = mapped_column(String(320), nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[str]       = mapped_column(String(255), nullable=False)
-    role: Mapped[str]            = mapped_column(String(50), default="member")
-    is_active: Mapped[bool]      = mapped_column(Boolean, default=True)
+    clerk_id: Mapped[str | None]  = mapped_column(String(255), nullable=True, unique=True)
+    email: Mapped[str]            = mapped_column(String(320), nullable=False)
+    hashed_password: Mapped[str]  = mapped_column(String(255), nullable=False, default="")
+    full_name: Mapped[str]        = mapped_column(String(255), nullable=False)
+    role: Mapped[str]             = mapped_column(String(50), default="admin")
+    is_active: Mapped[bool]       = mapped_column(Boolean, default=True)
 
     company: Mapped["Company"] = relationship("Company", back_populates="users")
 

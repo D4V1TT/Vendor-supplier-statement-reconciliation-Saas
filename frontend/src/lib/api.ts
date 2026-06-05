@@ -1,19 +1,31 @@
 /**
- * Typed API client — thin wrapper around fetch.
- * All requests attach the JWT from localStorage.
+ * Typed API client.
+ * Uses Clerk's session token for every authenticated request.
+ * Call `initApiAuth(getToken)` once in a top-level client component
+ * to wire up the token getter from Clerk's useAuth() hook.
  */
-
-import { getToken } from "./auth";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
+// Clerk's getToken is async — we store a reference set once at app boot
+let _getToken: (() => Promise<string | null>) | null = null;
+
+export function initApiAuth(getToken: () => Promise<string | null>) {
+  _getToken = getToken;
+}
+
+async function authHeader(): Promise<Record<string, string>> {
+  const token = _getToken ? await _getToken() : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const headers = await authHeader();
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
       ...(init.headers ?? {}),
     },
   });
@@ -83,29 +95,21 @@ export interface JobListItem {
   count_missing_in_ledger: number | null;
   count_unapplied_credit:  number | null;
   total_variance:          number | null;
-  // joined from statement
   vendor_name?:            string;
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 
 export const api = {
-  uploadStatement: (form: FormData) =>
-    fetch(`${BASE}/upload/statement`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: form,
-    }).then((r) => r.json()),
+  uploadStatement: async (form: FormData) => {
+    const headers = await authHeader();
+    return fetch(`${BASE}/upload/statement`, { method: "POST", headers, body: form }).then(r => r.json());
+  },
 
-  uploadLedger: (form: FormData) =>
-    fetch(`${BASE}/upload/ledger`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: form,
-    }).then((r) => r.json()),
-
-  listJobs: () =>
-    request<JobListItem[]>("/jobs"),
+  uploadLedger: async (form: FormData) => {
+    const headers = await authHeader();
+    return fetch(`${BASE}/upload/ledger`, { method: "POST", headers, body: form }).then(r => r.json());
+  },
 
   reconcile: (statement_id: string, ledger_id: string) =>
     request<Job>("/reconcile", {
@@ -118,6 +122,9 @@ export const api = {
 
   getReport: (jobId: string) =>
     request<ExceptionsReport>(`/jobs/${jobId}/report`),
+
+  listJobs: () =>
+    request<JobListItem[]>("/jobs"),
 
   getExportUrl: (jobId: string) =>
     `${BASE}/jobs/${jobId}/export/xlsx`,

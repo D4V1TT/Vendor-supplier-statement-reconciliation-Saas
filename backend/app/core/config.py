@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # ── Redis / Job Queue ─────────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379"
 
+    # ── Clerk ─────────────────────────────────────────────────────────────────
+    # Clerk Dashboard → API Keys → Advanced → JWKS URL
+    CLERK_JWKS_URL: str = ""
+
     # ── AI Fallback (Anthropic) ───────────────────────────────────────────────
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"

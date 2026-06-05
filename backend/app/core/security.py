@@ -8,25 +8,23 @@ import base64
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-# ── Passwords ────────────────────────────────────────────────────────────────
+# ── Passwords (bcrypt direct — passlib incompatible with Python 3.12) ────────
 
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────

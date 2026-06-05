@@ -1,2 +1,296 @@
-import { redirect } from "next/navigation";
-export default function Home() { redirect("/dashboard"); }
+/**
+ * PLG Landing Page
+ * Shows the value proposition + a live sandbox demo widget.
+ * Signed-in users are redirected straight to /dashboard.
+ */
+"use client";
+
+import React, { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, SignUpButton, SignInButton } from "@clerk/nextjs";
+import { DropZone } from "@/components/DropZone";
+
+// ── tiny inline icons ─────────────────────────────────────────────────────────
+const Check = () => (
+  <svg className="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+const FEATURES = [
+  "Matches invoices by ID, amount & date in seconds",
+  "Flags mismatches, missing invoices & unapplied credits",
+  "Exports a clean Excel exceptions report instantly",
+  "Supports PDF, Excel, CSV — any vendor format",
+];
+
+// Fake demo data shown blurred to tease the report
+const DEMO_ROWS = [
+  { id: "INV-4821", supplier: 12_450.00, ledger: 11_200.00, diff: 1_250.00, cat: "Amount Mismatch" },
+  { id: "INV-4830", supplier:  3_200.00, ledger: null,       diff: null,    cat: "Missing in Ledger" },
+  { id: "CN-0041",  supplier: -1_800.00, ledger: null,       diff: null,    cat: "Unapplied Credit" },
+  { id: "INV-4818", supplier:  8_750.00, ledger: null,       diff: null,    cat: "Missing in Ledger" },
+  { id: "INV-4799", supplier:  5_430.00, ledger: 5_230.00,  diff: 200.00,  cat: "Amount Mismatch" },
+];
+
+const catColor: Record<string, string> = {
+  "Amount Mismatch":    "bg-red-50 text-red-700 ring-red-200",
+  "Missing in Ledger":  "bg-amber-50 text-amber-700 ring-amber-200",
+  "Unapplied Credit":   "bg-violet-50 text-violet-700 ring-violet-200",
+};
+
+function fmt(n: number | null) {
+  if (n == null) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
+export default function LandingPage() {
+  const { isSignedIn } = useAuth();
+  const router = useRouter();
+
+  const [stmtFile, setStmtFile]   = useState<File | null>(null);
+  const [ledgerFile, setLedger]   = useState<File | null>(null);
+  const [showDemo, setShowDemo]   = useState(false);
+
+  // Redirect signed-in users straight to the app
+  if (isSignedIn) {
+    router.replace("/dashboard");
+    return null;
+  }
+
+  function handleTryDemo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stmtFile || !ledgerFile) return;
+    setShowDemo(true);
+    // Scroll to results
+    setTimeout(() => document.getElementById("demo-result")?.scrollIntoView({ behavior: "smooth" }), 100);
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+
+      {/* ── Nav ────────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </div>
+            <span className="font-bold text-slate-900 text-sm">VendorRecon</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <SignInButton mode="modal">
+              <button className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors px-3 py-1.5">
+                Sign in
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="rounded-xl bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm">
+                Get started free
+              </button>
+            </SignUpButton>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 mb-6">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+          Built for finance teams
+        </div>
+        <h1 className="text-5xl font-extrabold text-slate-900 leading-tight tracking-tight max-w-3xl mx-auto">
+          Retire the yellow highlighter.{" "}
+          <span className="text-indigo-600">Reconcile vendor statements</span>{" "}
+          in seconds.
+        </h1>
+        <p className="mt-6 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+          Upload your vendor's PDF statement and your internal AP ledger.
+          VendorRecon finds every mismatch, missing invoice, and unapplied credit — automatically.
+        </p>
+        <div className="mt-8 flex items-center justify-center gap-4">
+          <SignUpButton mode="modal">
+            <button className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 active:scale-[0.99]">
+              Start free — no credit card
+            </button>
+          </SignUpButton>
+          <a href="#sandbox" className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            Try sandbox demo
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </a>
+        </div>
+        <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+          {FEATURES.map(f => (
+            <li key={f} className="flex items-center gap-1.5 text-sm text-slate-500">
+              <Check /> {f}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* ── How it works ───────────────────────────────────────────────────── */}
+      <section className="bg-slate-50 border-y border-slate-100 py-16">
+        <div className="max-w-5xl mx-auto px-6">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-400 mb-10">How it works</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { n: "01", title: "Upload both files", desc: "Drop your vendor PDF statement and your AP ledger export (CSV, Excel, or any format)." },
+              { n: "02", title: "AI matches every line", desc: "Our engine compares each invoice by ID and amount, categorising matches and exceptions automatically." },
+              { n: "03", title: "Download the exceptions report", desc: "Get a clean Excel report with only the lines that need your attention — ready to send to your vendor." },
+            ].map(s => (
+              <div key={s.n} className="flex gap-4">
+                <span className="text-3xl font-black text-indigo-100 leading-none flex-shrink-0">{s.n}</span>
+                <div>
+                  <p className="font-bold text-slate-800">{s.title}</p>
+                  <p className="text-sm text-slate-500 mt-1 leading-relaxed">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Sandbox Demo ───────────────────────────────────────────────────── */}
+      <section id="sandbox" className="max-w-5xl mx-auto px-6 py-20">
+        <div className="text-center mb-10">
+          <p className="text-xs font-bold uppercase tracking-widest text-indigo-500 mb-2">Free sandbox</p>
+          <h2 className="text-3xl font-extrabold text-slate-900">See it work on your own files</h2>
+          <p className="text-slate-500 mt-2 text-sm">No account needed. Upload any sample files and see the exceptions detected instantly.</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {!showDemo ? (
+            <form onSubmit={handleTryDemo} className="p-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Vendor Statement</p>
+                  <DropZone
+                    label="Drop vendor statement"
+                    hint="PDF, Excel, CSV, TXT"
+                    accept=".pdf,.xlsx,.xls,.csv,.txt,.tsv,.ods"
+                    icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z" /></svg>}
+                    accentColor="indigo"
+                    file={stmtFile}
+                    onFile={setStmtFile}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Internal AP Ledger</p>
+                  <DropZone
+                    label="Drop AP ledger export"
+                    hint="PDF, Excel, CSV, TXT"
+                    accept=".pdf,.xlsx,.xls,.csv,.txt,.tsv,.ods"
+                    icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M3 6a3 3 0 013-3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6z" /></svg>}
+                    accentColor="violet"
+                    file={ledgerFile}
+                    onFile={setLedger}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={!stmtFile || !ledgerFile}
+                className={`w-full rounded-xl py-3 text-sm font-bold tracking-wide transition-all
+                  ${stmtFile && ledgerFile
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                    : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
+              >
+                Run Free Demo →
+              </button>
+            </form>
+          ) : (
+
+            /* ── Demo Result (blurred preview + CTA) ────────────────────── */
+            <div id="demo-result" className="animate-fade-up">
+              {/* Summary bar */}
+              <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+                {[
+                  { label: "Amount Mismatches", value: "2", color: "text-red-600" },
+                  { label: "Missing Invoices",  value: "2", color: "text-amber-600" },
+                  { label: "Unapplied Credits", value: "1", color: "text-violet-600" },
+                ].map(k => (
+                  <div key={k.label} className="px-6 py-5 text-center">
+                    <p className={`text-3xl font-extrabold ${k.color}`}>{k.value}</p>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">{k.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Blurred table */}
+              <div className="relative overflow-hidden">
+                <table className="w-full text-sm select-none">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      {["Invoice ID", "Supplier Amt", "Ledger Amt", "Variance", "Category"].map(h => (
+                        <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 blur-[3px] pointer-events-none">
+                    {DEMO_ROWS.map((r, i) => (
+                      <tr key={i} className="hover:bg-slate-50/60">
+                        <td className="px-5 py-3.5 font-mono font-bold text-slate-800 text-xs">{r.id}</td>
+                        <td className="px-5 py-3.5 tabular-nums font-medium">{fmt(r.supplier)}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-slate-400">{fmt(r.ledger)}</td>
+                        <td className="px-5 py-3.5 tabular-nums font-bold text-red-600">{r.diff != null ? `+${fmt(r.diff)}` : "—"}</td>
+                        <td className="px-5 py-3.5">
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${catColor[r.cat]}`}>{r.cat}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Unlock overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-[2px]">
+                  <div className="rounded-2xl border border-slate-200 bg-white shadow-xl px-8 py-8 text-center max-w-sm mx-4 space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mx-auto">
+                      <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-base">
+                        <span className="text-indigo-600">5 exceptions found</span> in your files
+                      </p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Create a free account to unlock the full report and download the Excel file.
+                      </p>
+                    </div>
+                    <SignUpButton mode="modal">
+                      <button className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm">
+                        Sign up free — see full report
+                      </button>
+                    </SignUpButton>
+                    <button
+                      onClick={() => setShowDemo(false)}
+                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      ← Try different files
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-100 py-8">
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
+          <p className="text-xs text-slate-400">© 2026 VendorRecon. All data encrypted at rest.</p>
+          <div className="flex gap-5">
+            <a href="/login" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Sign in</a>
+            <a href="#sandbox" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Demo</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
