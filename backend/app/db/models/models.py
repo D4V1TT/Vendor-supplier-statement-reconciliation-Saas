@@ -182,7 +182,8 @@ class ReconciliationJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus), default=JobStatus.PENDING, nullable=False
+        Enum(JobStatus, name="job_status", values_callable=lambda x: [e.value for e in x]),
+        default=JobStatus.PENDING, nullable=False
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 

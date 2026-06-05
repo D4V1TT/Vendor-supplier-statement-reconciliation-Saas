@@ -58,19 +58,28 @@ def verify_clerk_token(token: str) -> dict:
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
 
-    signing_key = None
-    for key_data in jwks.get("keys", []):
-        if key_data.get("kid") == kid:
+    all_keys = jwks.get("keys", [])
+    if not all_keys:
+        raise JWTError("JWKS has no keys")
+
+    # Find by kid if present, otherwise try every key (handles tokens without kid)
+    candidates = [k for k in all_keys if k.get("kid") == kid] if kid else all_keys
+    if not candidates:
+        candidates = all_keys  # fallback: try all
+
+    last_error: Exception = JWTError("No key matched")
+    for key_data in candidates:
+        try:
             signing_key = jwk.construct(key_data)
-            break
+            payload = jwt.decode(
+                token,
+                signing_key.to_dict(),
+                algorithms=["RS256"],
+                options={"verify_aud": False},
+            )
+            return payload
+        except Exception as exc:
+            last_error = exc
+            continue
 
-    if signing_key is None:
-        raise JWTError(f"No matching JWK found for kid={kid!r}")
-
-    payload = jwt.decode(
-        token,
-        signing_key.to_dict(),
-        algorithms=["RS256"],
-        options={"verify_aud": False},   # Clerk tokens have no audience by default
-    )
-    return payload
+    raise JWTError(f"JWT verification failed: {last_error}")

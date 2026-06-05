@@ -15,8 +15,10 @@ export function initApiAuth(getToken: () => Promise<string | null>) {
 }
 
 async function authHeader(): Promise<Record<string, string>> {
-  const token = _getToken ? await _getToken() : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  if (!_getToken) throw new Error("Not authenticated — please sign in again.");
+  const token = await _getToken();
+  if (!token) throw new Error("Session expired — please sign in again.");
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -103,12 +105,18 @@ export interface JobListItem {
 export const api = {
   uploadStatement: async (form: FormData) => {
     const headers = await authHeader();
-    return fetch(`${BASE}/upload/statement`, { method: "POST", headers, body: form }).then(r => r.json());
+    const res = await fetch(`${BASE}/upload/statement`, { method: "POST", headers, body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail ?? `Upload failed (${res.status})`);
+    return data;
   },
 
   uploadLedger: async (form: FormData) => {
     const headers = await authHeader();
-    return fetch(`${BASE}/upload/ledger`, { method: "POST", headers, body: form }).then(r => r.json());
+    const res = await fetch(`${BASE}/upload/ledger`, { method: "POST", headers, body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail ?? `Upload failed (${res.status})`);
+    return data;
   },
 
   reconcile: (statement_id: string, ledger_id: string) =>
