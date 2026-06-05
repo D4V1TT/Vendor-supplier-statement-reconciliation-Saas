@@ -211,10 +211,11 @@ def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
     # Drop rows with blank/NaN invoice IDs
     df = df[df["invoice_id"].str.strip().ne("") & df["invoice_id"].str.upper().ne("NAN")]
 
-    null_amounts = df["amount"].isna().sum()
+    # Treat null / unparseable amounts as 0.00 (keep the row, don't drop it).
+    null_amounts = int(df["amount"].isna().sum())
     if null_amounts:
-        logger.warning("%s: %d rows with unparseable amounts will be skipped.", source, null_amounts)
-        df = df[df["amount"].notna()]
+        logger.info("%s: %d row(s) had null/unparseable amounts — treated as 0.00.", source, null_amounts)
+        df["amount"] = df["amount"].fillna(0.0)
 
     # Deduplicate on invoice_id — keep the last occurrence (most recently posted)
     dupes = df.duplicated("invoice_id", keep=False)
