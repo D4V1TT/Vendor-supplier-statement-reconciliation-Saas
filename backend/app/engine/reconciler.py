@@ -124,12 +124,26 @@ class ReconciliationReport:
 def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
     """
     Enforce column types and clean strings.
-    `source` is used only for error messages.
+    Uses the smart column detector (keyword → content → LLM waterfall)
+    to find invoice_id and amount regardless of what the file calls them.
     """
-    required = {"invoice_id", "amount"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"{source} DataFrame is missing required columns: {missing}")
+    from app.engine.column_detector import detect_columns  # noqa: PLC0415
+
+    df = df.copy()
+    detected = detect_columns(df)
+
+    if detected.missing_required:
+        raise ValueError(
+            f"{source}: could not identify required columns {detected.missing_required}. "
+            f"File has these columns: {detected.raw_columns}. "
+            f"Please re-upload with a column mapping."
+        )
+
+    # Apply the detected mapping (renames raw → canonical)
+    df = detected.apply(df)
+    logger.debug("%s column mapping (method=%s, confidence=%.2f): %s",
+                 source, detected.method, detected.overall_confidence,
+                 detected.mapping)
 
     df = df.copy()
     df["invoice_id"] = df["invoice_id"].astype(str).str.strip().str.upper()
@@ -341,12 +355,14 @@ def parse_ledger_file(
             "Accepted formats: PDF, XLSX, XLS, CSV, TSV, TXT, ODS."
         )
 
-    # Apply user-supplied mapping first, then auto-detect the rest
+    # Apply user-supplied mapping first (explicit always wins)
     if column_mapping:
         df.rename(columns=column_mapping, inplace=True)
 
-    auto_map = _normalise_headers(list(df.columns))
-    df.rename(columns=auto_map, inplace=True)
+    # Then run the smart detector on remaining columns
+    from app.engine.column_detector import detect_columns, apply_mapping  # noqa: PLC0415
+    detected = detect_columns(df)
+    df = detected.apply(df)
 
     logger.info("Ledger parsed: %d rows, columns=%s", len(df), list(df.columns))
     return df

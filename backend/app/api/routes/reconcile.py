@@ -39,6 +39,38 @@ router = APIRouter(tags=["reconciliation"])
 
 # ── File Uploads ───────────────────────────────────────────────────────────────
 
+@router.post("/detect-columns")
+async def detect_columns_endpoint(
+    file:         UploadFile   = File(...),
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """
+    Preview column detection on a file without saving it.
+    Returns detected mapping + confidence so the frontend can show
+    a confirmation/correction step before the full upload.
+    """
+    from app.engine.column_detector import detect_columns  # noqa: PLC0415
+
+    raw_bytes = await file.read()
+    try:
+        df = parse_ledger_file(raw_bytes, file.filename or "upload.csv")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    detected = detect_columns(df)
+    return {
+        "raw_columns":          detected.raw_columns,
+        "mapping":              detected.mapping,        # {raw → canonical}
+        "confidence":           detected.confidence,     # {canonical → 0–1}
+        "overall_confidence":   detected.overall_confidence,
+        "needs_user_confirmation": detected.needs_user_confirmation,
+        "missing_required":     list(detected.missing_required),
+        "method":               detected.method,
+        "sample_rows":          detected.sample_rows[:3],
+    }
+
+
 @router.post("/upload/statement", response_model=UploadedStatementResponse, status_code=201)
 async def upload_statement(
     file:         UploadFile      = File(...),

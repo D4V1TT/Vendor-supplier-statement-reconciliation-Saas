@@ -30,6 +30,8 @@ export function ApiAuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initApiAuth(safeGetToken);
+    // Expose on window so ad-hoc fetches (column detection) can access it
+    (window as any).__clerkGetToken = safeGetToken;
   }, [isLoaded, isSignedIn, getToken]);
 
   return <>{children}</>;
