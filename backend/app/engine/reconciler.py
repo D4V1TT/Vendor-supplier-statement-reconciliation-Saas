@@ -19,6 +19,7 @@ on invoice_id so "INV-001" and "inv-001 " are treated as equal.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -119,6 +120,27 @@ class ReconciliationReport:
         }
 
 
+# ── Money Parsing ─────────────────────────────────────────────────────────────
+
+def _to_money(series: pd.Series) -> pd.Series:
+    """
+    Convert a column of messy monetary strings to floats.
+    Handles: thousands commas (1,500.00), currency symbols ($ £ €),
+    parenthesis-negatives ((450.00) → -450.00), and trailing/leading spaces.
+    """
+    s = series.astype(str).str.strip()
+    # Parenthesis = negative
+    neg = s.str.startswith("(") & s.str.endswith(")")
+    s = s.str.replace(r"[(),$£€\s]", "", regex=True)
+    # Handle trailing minus (some systems write "450.00-")
+    trailing_neg = s.str.endswith("-")
+    s = s.str.rstrip("-")
+    nums = pd.to_numeric(s, errors="coerce")
+    nums = nums.where(~neg, -nums.abs())
+    nums = nums.where(~trailing_neg, -nums.abs())
+    return nums
+
+
 # ── Input Normalisation ───────────────────────────────────────────────────────
 
 def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
@@ -147,7 +169,16 @@ def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
 
     df = df.copy()
     df["invoice_id"] = df["invoice_id"].astype(str).str.strip().str.upper()
-    df["amount"]     = pd.to_numeric(df["amount"], errors="coerce")
+
+    # ── Synthesize amount from Debit/Credit columns if needed ─────────────────
+    # Many statements use two columns (Debit, Credit) instead of one signed
+    # amount. Net = |debit| - |credit|  →  invoices positive, credits negative.
+    if "amount" not in df.columns:
+        debit  = _to_money(df["debit"])  if "debit"  in df.columns else 0.0
+        credit = _to_money(df["credit"]) if "credit" in df.columns else 0.0
+        df["amount"] = debit.abs().fillna(0) - credit.abs().fillna(0)
+    else:
+        df["amount"] = _to_money(df["amount"])
 
     # ── Drop summary / total rows (false exceptions otherwise) ────────────────
     # These commonly appear at the bottom of statements: TOTAL, SUBTOTAL,
@@ -158,17 +189,27 @@ def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
         "BROUGHT FORWARD", "C/F", "B/F", "TOTALS",
     )
     before = len(df)
-    is_summary = df["invoice_id"].str.upper().str.strip().isin(summary_keywords) | \
-                 df["invoice_id"].str.upper().str.contains(
-                     r"\b(?:TOTAL|SUBTOTAL|CARRIED\s+FORWARD|BROUGHT\s+FORWARD)\b",
-                     regex=True, na=False,
-                 )
+    summary_re = r"\b(?:TOTAL|SUBTOTAL|CARRIED\s+FORWARD|BROUGHT\s+FORWARD|AMOUNT\s+DUE)\b"
+
+    # Scan ALL string columns for summary keywords (the label may have leaked
+    # into the date/description column on whitespace-aligned statements).
+    id_upper = df["invoice_id"].str.upper().str.strip()
+    is_summary = id_upper.isin(summary_keywords) | id_upper.str.contains(summary_re, regex=True, na=False)
+    for col in ("invoice_date", "description"):
+        if col in df.columns:
+            is_summary |= df[col].astype(str).str.upper().str.contains(summary_re, regex=True, na=False)
+
+    # Reject IDs that are clearly money values ($52,150.00) — real invoice refs
+    # contain at least one letter or a separator like "-".
+    looks_like_money = id_upper.str.match(r"^[\$£€]?[\d,]+\.?\d*$", na=False)
+    is_summary |= looks_like_money
+
     df = df[~is_summary]
     if before - len(df):
-        logger.info("%s: dropped %d summary/total row(s).", source, before - len(df))
+        logger.info("%s: dropped %d summary/total/junk row(s).", source, before - len(df))
 
     # Drop rows with blank/NaN invoice IDs
-    df = df[df["invoice_id"].str.strip().ne("") & df["invoice_id"].ne("NAN")]
+    df = df[df["invoice_id"].str.strip().ne("") & df["invoice_id"].str.upper().ne("NAN")]
 
     null_amounts = df["amount"].isna().sum()
     if null_amounts:
@@ -375,54 +416,236 @@ def _find_header_row(lines: list[str], delimiter: str) -> int:
     return 0
 
 
-def _read_delimited_robust(file_bytes: bytes, filename_lower: str) -> pd.DataFrame:
+def _is_separator_line(line: str) -> bool:
+    """True for divider lines made only of dashes/equals/underscores/spaces."""
+    stripped = line.strip()
+    return bool(stripped) and bool(re.fullmatch(r"[\-=_\+\s\|]+", stripped))
+
+
+# Section-title keywords that hint a block is NOT the invoice table.
+_NON_INVOICE_SECTION = re.compile(
+    r"\b(payment|remittance|received|deposit|bank|wire|cheque|check\s+received|"
+    r"aging|ageing|summary|vendor\s+info|bill\s+to|ship\s+to|contact)\b",
+    re.IGNORECASE,
+)
+# Section-title keywords that hint a block IS the invoice table.
+_INVOICE_SECTION = re.compile(
+    r"\b(invoice|itemi[sz]ed|transaction|charges|statement\s+detail|"
+    r"outstanding|open\s+item|line\s+item)\b",
+    re.IGNORECASE,
+)
+
+
+def _segment_blocks(raw_lines: list[str]) -> list[dict]:
     """
-    Parse a CSV/TSV/TXT that may contain:
-      - a title/preamble line before the table
-      - blank lines
-      - ragged rows (trailing totals with fewer/more columns)
+    Split a statement into candidate table blocks.
+
+    A block boundary is a blank line, a separator line, or a section-title
+    line (a short line of mostly letters, e.g. "PAYMENTS RECEIVED").
+    Each returned block carries the nearest preceding title line so we can
+    bias scoring toward "Itemized Transactions" over "Payments".
     """
+    blocks: list[dict] = []
+    current: list[str] = []
+    current_title = ""
+    last_title = ""
+
+    def _is_title(line: str) -> bool:
+        s = line.strip()
+        if not s or len(s) > 60:
+            return False
+        # A title is a single label — reject anything containing a delimiter
+        # (comma/tab/semicolon/pipe), which would make it a header or data row.
+        if re.search(r"[,\t;|]", s):
+            return False
+        # Mostly letters, few digits — looks like a heading, not a data row
+        letters = sum(c.isalpha() for c in s)
+        digits  = sum(c.isdigit() for c in s)
+        # Single "cell" when split on 2+ spaces (no columnar structure)
+        return letters >= 3 and digits <= 2 and len(re.split(r"\s{2,}", s)) <= 2
+
+    def _flush():
+        nonlocal current, current_title
+        if len(current) >= 2:          # need at least header + 1 row
+            blocks.append({"title": current_title, "lines": current})
+        current = []
+
+    for ln in raw_lines:
+        # Separator lines (-----, =====) are skipped, NOT treated as block
+        # boundaries — a dashed underline often sits between a header and its
+        # data rows and must not split them apart.
+        if _is_separator_line(ln):
+            continue
+        if not ln.strip():
+            _flush()
+            continue
+        if _is_title(ln) and not current:
+            # Title immediately precedes the next block
+            last_title = ln.strip()
+            continue
+        if _is_title(ln) and current:
+            # A title mid-stream ends the current block and starts a new one
+            _flush()
+            last_title = ln.strip()
+            continue
+        if not current:
+            current_title = last_title
+        current.append(ln)
+    _flush()
+    return blocks
+
+
+def _parse_table_lines(lines: list[str], filename_lower: str) -> pd.DataFrame:
+    """Parse ONE block of content lines (delimited or whitespace-aligned)."""
     import io  # noqa: PLC0415
 
-    text = file_bytes.decode("utf-8-sig", errors="ignore")
-    # Normalise line endings, drop fully blank lines
-    raw_lines = [ln for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
-    non_blank = [ln for ln in raw_lines if ln.strip()]
-    if not non_blank:
-        raise ValueError("File appears to be empty.")
+    content = [ln for ln in lines if ln.strip() and not _is_separator_line(ln)]
+    if len(content) < 2:
+        raise ValueError("Block too small to be a table.")
 
-    # Pick delimiter: honour extension hint, else sniff
     if filename_lower.endswith(".tsv"):
         delimiter = "\t"
+    elif filename_lower.endswith(".csv"):
+        delimiter = ","
     else:
-        delimiter = _detect_delimiter("\n".join(non_blank[:20]))
+        delimiter = _detect_delimiter("\n".join(content[:20]))
 
-    # Locate the real header row (skip preamble banners)
-    header_idx = _find_header_row(non_blank, delimiter)
-    table_text = "\n".join(non_blank[header_idx:])
+    def _consistency(sep: str | None) -> tuple[int, float]:
+        if sep is None:
+            counts = [len(re.split(r"\s{2,}", ln.strip())) for ln in content[:30]]
+        else:
+            counts = [len(ln.split(sep)) for ln in content[:30]]
+        counts = [c for c in counts if c > 1]
+        if not counts:
+            return (0, 0.0)
+        modal = max(set(counts), key=counts.count)
+        return (modal, counts.count(modal) / len(counts))
 
-    # Parse with the python engine (more tolerant) and skip bad lines
-    df = pd.read_csv(
-        io.StringIO(table_text),
-        sep=delimiter,
-        engine="python",
-        skip_blank_lines=True,
-        on_bad_lines="skip",        # drop ragged rows instead of crashing
-        dtype=str,                   # read everything as string; typing happens later
+    delim_modal, delim_score = _consistency(delimiter)
+    ws_modal,    ws_score    = _consistency(None)
+
+    use_whitespace = (
+        (ws_modal > delim_modal and ws_modal >= 3)
+        or (ws_modal >= 3 and ws_score >= 0.6 and delim_score < 0.85)
+        or delim_modal < 2
     )
 
-    # Drop entirely-empty columns (common with trailing delimiters)
-    df = df.dropna(axis=1, how="all")
-    # Drop unnamed junk columns produced by trailing separators
-    df = df.loc[:, ~df.columns.astype(str).str.match(r"^Unnamed")]
+    if use_whitespace:
+        df = _parse_whitespace_aligned(content)
+    else:
+        header_idx = _find_header_row(content, delimiter)
+        df = pd.read_csv(
+            io.StringIO("\n".join(content[header_idx:])),
+            sep=delimiter, engine="python", skip_blank_lines=True,
+            on_bad_lines="skip", dtype=str,
+        )
 
+    df = df.dropna(axis=1, how="all")
+    df = df.loc[:, ~df.columns.astype(str).str.match(r"^Unnamed")]
+    return df
+
+
+def _score_invoice_table(df: pd.DataFrame, title: str) -> float:
+    """
+    Score how likely a parsed block is THE invoice/transactions table.
+    Higher = better. Combines column-detection confidence, row count,
+    and section-title hints (favour "invoices", penalise "payments").
+    """
     if df.empty or len(df.columns) < 2:
+        return 0.0
+    try:
+        from app.engine.column_detector import detect_columns  # noqa: PLC0415
+        det = detect_columns(df)
+    except Exception:
+        return 0.0
+
+    if det.missing_required:
+        return 0.0   # no invoice_id+amount → not the invoice table
+
+    score = det.overall_confidence
+    score += min(len(df), 50) * 0.01          # more rows = more likely the grid
+    if title:
+        if _INVOICE_SECTION.search(title):
+            score += 0.5
+        if _NON_INVOICE_SECTION.search(title):
+            score -= 0.6
+    return score
+
+
+def _read_delimited_robust(file_bytes: bytes, filename_lower: str) -> pd.DataFrame:
+    """
+    Parse a CSV/TSV/TXT/space-aligned statement that may contain MULTIPLE
+    tables (e.g. Itemized Transactions + Payments). Segments the file into
+    blocks, parses & scores each, and returns the one that best matches an
+    invoice/transactions table.
+    """
+    text = file_bytes.decode("utf-8-sig", errors="ignore")
+    raw_lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    blocks = _segment_blocks(raw_lines)
+    if not blocks:
+        raise ValueError("File appears to be empty or has no tabular data.")
+
+    # Parse + score every block; keep the best invoice-like table.
+    best_df: pd.DataFrame | None = None
+    best_score = 0.0
+    for block in blocks:
+        try:
+            df = _parse_table_lines(block["lines"], filename_lower)
+        except Exception:
+            continue
+        s = _score_invoice_table(df, block["title"])
+        logger.debug("Block (title=%r, rows=%d) scored %.3f", block["title"], len(df), s)
+        if s > best_score:
+            best_score, best_df = s, df
+
+    # Fallback: if scoring found nothing usable, parse the whole file as one table
+    if best_df is None:
+        all_content = [ln for ln in raw_lines if ln.strip() and not _is_separator_line(ln)]
+        if not all_content:
+            raise ValueError("File appears to be empty.")
+        best_df = _parse_table_lines(all_content, filename_lower)
+
+    if best_df.empty or len(best_df.columns) < 2:
         raise ValueError(
             "Could not identify a valid data table in the file. "
             "Ensure it has a header row with at least an invoice ID and amount column."
         )
 
-    return df
+    return best_df
+
+
+def _parse_whitespace_aligned(lines: list[str]) -> pd.DataFrame:
+    """
+    Parse a space/fixed-width-aligned table by splitting each row on runs
+    of 2+ spaces. Finds the header row, then aligns each data row to it.
+    """
+    # Find header: first row that splits into >= 3 fields AND whose next row
+    # splits into the same count (data rows below it).
+    split_counts = [len(re.split(r"\s{2,}", ln.strip())) for ln in lines]
+    header_idx = 0
+    for i in range(len(lines) - 1):
+        if split_counts[i] >= 3 and abs(split_counts[i] - split_counts[i + 1]) <= 1:
+            header_idx = i
+            break
+
+    headers = [h.strip() for h in re.split(r"\s{2,}", lines[header_idx].strip())]
+    n_cols  = len(headers)
+
+    rows: list[list[str]] = []
+    for ln in lines[header_idx + 1:]:
+        parts = [p.strip() for p in re.split(r"\s{2,}", ln.strip())]
+        if len(parts) < 2:
+            continue
+        # Pad or trim to header width
+        if len(parts) < n_cols:
+            parts += [""] * (n_cols - len(parts))
+        elif len(parts) > n_cols:
+            # Merge the overflow into the widest text column (usually description)
+            parts = parts[: n_cols - 1] + [" ".join(parts[n_cols - 1:])]
+        rows.append(parts)
+
+    return pd.DataFrame(rows, columns=headers)
 
 
 def _read_excel_robust(buffer, engine: str) -> pd.DataFrame:

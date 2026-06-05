@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # ── Canonical target schema ───────────────────────────────────────────────────
 REQUIRED_COLS = {"invoice_id", "amount"}
-OPTIONAL_COLS = {"invoice_date", "balance_due", "description", "po_number"}
+OPTIONAL_COLS = {"invoice_date", "balance_due", "description", "po_number", "debit", "credit"}
 ALL_CANONICAL = REQUIRED_COLS | OPTIONAL_COLS
 
 # Confidence assigned by each phase (earlier/cheaper phases are more trusted
@@ -92,9 +92,8 @@ ALIASES: dict[str, list[str]] = {
     "amount": [
         "amount", "amt", "totalamount", "invoiceamount", "grossamount",
         "netamount", "grossvalue", "netvalue", "invoicevalue", "totalvalue",
-        "lineamount", "linevalue", "debit", "debitamount", "charge",
-        "chargeamount", "billedamount", "billedvalue", "originalamount",
-        "txnamount", "transactionamount", "value", "total", "subtotal",
+        "lineamount", "linevalue", "billedamount", "billedvalue",
+        "originalamount", "txnamount", "transactionamount", "value",
     ],
     "balance_due": [
         "balancedue", "outstanding", "openamount", "openbalance", "dueamount",
@@ -113,6 +112,14 @@ ALIASES: dict[str, list[str]] = {
     "po_number": [
         "ponumber", "pono", "ponum", "purchaseorder", "orderno", "ordernum",
         "orderid", "po", "purchaseorderno",
+    ],
+    # Debit / Credit dual-column statements: net amount = |debit| - |credit|
+    "debit": [
+        "debit", "debits", "debitamount", "debit", "dr", "charges", "chargeamount",
+    ],
+    "credit": [
+        "credit", "credits", "creditamount", "cr", "payment", "payments",
+        "paymentamount", "creditnote",
     ],
 }
 
@@ -265,13 +272,29 @@ class ColumnMapping:
     sample_rows: list[dict] = field(default_factory=list)
 
     @property
+    def has_amount_source(self) -> bool:
+        """amount is satisfied either directly OR by a debit/credit pair."""
+        mapped = set(self.mapping.values())
+        return "amount" in mapped or "debit" in mapped or "credit" in mapped
+
+    @property
     def overall_confidence(self) -> float:
-        scores = [self.confidence.get(c, 0.0) for c in REQUIRED_COLS]
-        return min(scores) if scores else 0.0
+        mapped = set(self.mapping.values())
+        # invoice_id confidence
+        id_conf = self.confidence.get("invoice_id", 0.0)
+        # amount confidence — best of direct amount or debit/credit
+        amt_sources = [self.confidence.get(c, 0.0) for c in ("amount", "debit", "credit") if c in mapped]
+        amt_conf = max(amt_sources) if amt_sources else 0.0
+        return min(id_conf, amt_conf)
 
     @property
     def missing_required(self) -> set[str]:
-        return REQUIRED_COLS - set(self.mapping.values())
+        missing = set()
+        if "invoice_id" not in self.mapping.values():
+            missing.add("invoice_id")
+        if not self.has_amount_source:
+            missing.add("amount")
+        return missing
 
     @property
     def needs_user_confirmation(self) -> bool:
@@ -290,24 +313,31 @@ def detect_columns(df: pd.DataFrame) -> ColumnMapping:
     sample_rows = df.head(5).to_dict(orient="records")
     resolved:   dict[str, tuple[str, float]] = {}   # canonical → (raw, conf)
 
+    def _amount_satisfied() -> bool:
+        keys = set(resolved)
+        return "amount" in keys or "debit" in keys or "credit" in keys
+
+    def _id_satisfied() -> bool:
+        return "invoice_id" in resolved
+
     # ── Phase 2: Alias (Phase 1 sanitization happens inside _alias_match) ──────
     resolved.update(_alias_match(columns))
     method = "alias"
 
     # ── Phase 2.5: Content inference for unresolved required fields ────────────
-    if REQUIRED_COLS - set(resolved):
+    if not _id_satisfied() or not _amount_satisfied():
         claimed = {raw for raw, _ in resolved.values()}
-        for canon, val in _content_match(df, claimed).items():
+        content = _content_match(df, claimed)
+        for canon, val in content.items():
             resolved.setdefault(canon, val)
-        if REQUIRED_COLS & set(_content_match(df, claimed)):
+        if content:
             method = "content"
 
     # ── Phase 3: LLM fallback only if a required field is still missing ────────
-    if REQUIRED_COLS - set(resolved):
+    if not _id_satisfied() or not _amount_satisfied():
         for canon, val in _llm_match(columns, sample_rows).items():
             resolved.setdefault(canon, val)
-        if resolved:
-            method = "llm"
+        method = "llm"
 
     # ── Assemble result ───────────────────────────────────────────────────────
     mapping    = {raw: canon for canon, (raw, _) in resolved.items()}

@@ -187,12 +187,105 @@ def _extract_with_pdfplumber(pdf_bytes: bytes) -> ExtractionResult | None:
     )
 
 
-# ── OCR Extraction ────────────────────────────────────────────────────────────
+# ── OCR Extraction (coordinate-grid aware) ────────────────────────────────────
+
+def _preprocess_for_ocr(img: "Image.Image") -> "Image.Image":
+    """
+    Improve OCR accuracy on low-contrast / carbon-copy scans:
+      - convert to grayscale
+      - boost contrast
+      - binarize (threshold) to clean up smudges
+    """
+    from PIL import ImageOps, ImageFilter  # noqa: PLC0415
+
+    gray = ImageOps.grayscale(img)
+    gray = ImageOps.autocontrast(gray, cutoff=2)
+    gray = gray.filter(ImageFilter.MedianFilter(size=3))   # de-speckle
+    # Simple binary threshold
+    bw = gray.point(lambda p: 255 if p > 150 else 0)
+    return bw
+
+
+def _ocr_rows_from_image(img: "Image.Image") -> list[list[str]]:
+    """
+    Use Tesseract's word-level bounding boxes to reconstruct table rows.
+
+    Words are clustered into rows by their vertical (top) coordinate, then
+    sorted left-to-right by horizontal (left) coordinate within each row.
+    This recovers columnar structure even when scans are skewed or the
+    background is noisy — far more robust than splitting OCR'd text on spaces.
+    """
+    from pytesseract import Output  # noqa: PLC0415
+
+    processed = _preprocess_for_ocr(img)
+    data = pytesseract.image_to_data(processed, config="--psm 6", output_type=Output.DICT)
+
+    # Collect confident words with their REAL geometry (left/top/width/height)
+    words = []
+    for i in range(len(data["text"])):
+        text = (data["text"][i] or "").strip()
+        conf = int(data["conf"][i]) if str(data["conf"][i]).lstrip("-").isdigit() else -1
+        if text and conf > 30:
+            words.append({
+                "text":   text,
+                "left":   data["left"][i],
+                "top":    data["top"][i],
+                "width":  data["width"][i],
+                "height": data["height"][i],
+            })
+    if not words:
+        return []
+
+    # Cluster into rows: words whose vertical position is within ~half a line
+    words.sort(key=lambda w: w["top"])
+    heights  = sorted(w["height"] for w in words)
+    median_h = heights[len(heights) // 2]
+    row_tol  = max(median_h * 0.6, 6)
+
+    rows: list[list[dict]] = []
+    for w in words:
+        placed = False
+        for row in rows:
+            # Compare to the row's average top for stability on skewed scans
+            row_top = sum(x["top"] for x in row) / len(row)
+            if abs(row_top - w["top"]) <= row_tol:
+                row.append(w)
+                placed = True
+                break
+        if not placed:
+            rows.append([w])
+    rows.sort(key=lambda r: min(w["top"] for w in r))
+
+    # Estimate a column-gap threshold from the median character width.
+    median_w = sorted(w["width"] for w in words)[len(words) // 2]
+    avg_char = max(median_w / 6, 4)          # rough px per character
+    gap_threshold = avg_char * 3             # 3+ blank chars = new column
+
+    # Within each row, sort left→right; merge words with small gaps into one cell.
+    table: list[list[str]] = []
+    for row in rows:
+        row.sort(key=lambda w: w["left"])
+        cells: list[str] = []
+        prev_right: int | None = None
+        for w in row:
+            gap = (w["left"] - prev_right) if prev_right is not None else 0
+            if prev_right is None or gap > gap_threshold:
+                cells.append(w["text"])                   # new column cell
+            else:
+                cells[-1] = cells[-1] + " " + w["text"]   # same cell
+            prev_right = w["left"] + w["width"]           # REAL right edge
+        if cells:
+            table.append(cells)
+
+    return table
+
 
 def _extract_with_ocr(pdf_bytes: bytes) -> ExtractionResult | None:
     """
-    Convert each PDF page to an image and run Tesseract OCR.
-    Then apply the same header-matching heuristics on the text table.
+    Convert each PDF page to an image and OCR it with coordinate-grid
+    reconstruction (handles scanned carbon-copy / legacy statements).
+    Builds a DataFrame from the reconstructed grid and applies header
+    detection, then converts to StatementLineItems.
     """
     try:
         images: list[Image.Image] = convert_from_bytes(pdf_bytes, dpi=300)
@@ -200,20 +293,30 @@ def _extract_with_ocr(pdf_bytes: bytes) -> ExtractionResult | None:
         logger.warning("pdf2image conversion failed: %s", exc)
         return None
 
-    all_text_lines: list[str] = []
+    all_rows: list[list[str]] = []
+    raw_text_lines: list[str] = []
     for img in images:
-        text = pytesseract.image_to_string(img, config="--psm 6")
-        all_text_lines.extend(text.splitlines())
+        grid = _ocr_rows_from_image(img)
+        all_rows.extend(grid)
+        raw_text_lines.extend(" ".join(cells) for cells in grid)
 
-    raw_text = "\n".join(all_text_lines)
+    raw_text = "\n".join(raw_text_lines)
+    if not all_rows:
+        return None
 
-    # Try to detect a header row and tabular data from OCR text
-    line_items, warnings = _parse_text_lines_to_items(all_text_lines)
+    # Hand the reconstructed grid to the shared text-line parser as a fallback,
+    # AND attempt a DataFrame build using the most common column count.
+    line_items, warnings = _grid_to_items(all_rows)
+
+    # If the grid approach found nothing, fall back to regex line parsing
+    if not line_items:
+        line_items, warnings = _parse_text_lines_to_items(raw_text_lines)
 
     if not line_items:
         return None
 
-    confidence = min(0.75, len(line_items) / max(len(all_text_lines), 1) * 10)
+    # Confidence scales with how many rows parsed cleanly
+    confidence = min(0.80, len(line_items) / max(len(all_rows), 1))
 
     return ExtractionResult(
         line_items=line_items,
@@ -222,6 +325,50 @@ def _extract_with_ocr(pdf_bytes: bytes) -> ExtractionResult | None:
         raw_text=raw_text,
         warnings=warnings,
     )
+
+
+def _grid_to_items(rows: list[list[str]]) -> tuple[list[StatementLineItem], list[str]]:
+    """
+    Build StatementLineItems from an OCR'd coordinate grid by reusing the
+    smart column detector (alias → content → LLM) on the reconstructed table.
+    """
+    import pandas as pd  # noqa: PLC0415
+
+    if len(rows) < 2:
+        return [], ["OCR grid too small."]
+
+    # Use the modal column count as the table width
+    widths = [len(r) for r in rows if len(r) >= 2]
+    if not widths:
+        return [], ["OCR grid has no multi-column rows."]
+    n_cols = max(set(widths), key=widths.count)
+
+    # Normalise every row to n_cols (pad/merge overflow into last cell)
+    norm: list[list[str]] = []
+    for r in rows:
+        if len(r) < 2:
+            continue
+        if len(r) < n_cols:
+            r = r + [""] * (n_cols - len(r))
+        elif len(r) > n_cols:
+            r = r[: n_cols - 1] + [" ".join(r[n_cols - 1:])]
+        norm.append(r)
+
+    # First row = header
+    header, *body = norm
+    if not body:
+        return [], ["OCR grid has no data rows."]
+
+    df = pd.DataFrame(body, columns=[h or f"col_{i}" for i, h in enumerate(header)])
+
+    try:
+        from app.engine.reconciler import _normalise  # noqa: PLC0415
+        norm_df = _normalise(df, "ocr-statement")
+    except Exception as exc:
+        return [], [f"OCR grid column detection failed: {exc}"]
+
+    items, warnings = _parse_dataframe_to_items(norm_df)
+    return items, warnings
 
 
 # ── LLM Extraction (Anthropic Structured Outputs) ─────────────────────────────
