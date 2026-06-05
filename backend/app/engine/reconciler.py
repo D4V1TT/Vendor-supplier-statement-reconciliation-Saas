@@ -278,13 +278,15 @@ def reconcile(
 
         # ── Rule 4 (checked before Rule 3 to catch credits not in ledger) ─────
         if ledger_amount is None and supp_amount < 0:
+            # Ledger has no entry → ledger value is effectively 0, so the full
+            # supplier amount is the discrepancy (variance = supplier - 0).
             line_items.append(
                 LineItemResult(
                     invoice_id=inv_id,
                     invoice_date=inv_date,
                     supplier_amount=supp_amount,
                     ledger_amount=None,
-                    variance=None,
+                    variance=round(supp_amount, 2),
                     category=FLAGGED_UNAPPLIED_CREDIT,
                     balance_due=balance_due,
                     notes=(
@@ -297,13 +299,15 @@ def reconcile(
 
         # ── Rule 3 ────────────────────────────────────────────────────────────
         if ledger_amount is None:
+            # Missing from ledger → ledger value is effectively 0, so the full
+            # supplier amount is the discrepancy (variance = supplier - 0).
             line_items.append(
                 LineItemResult(
                     invoice_id=inv_id,
                     invoice_date=inv_date,
                     supplier_amount=supp_amount,
                     ledger_amount=None,
-                    variance=None,
+                    variance=round(supp_amount, 2),
                     category=FLAGGED_MISSING_IN_LEDGER,
                     balance_due=balance_due,
                     notes=f"Invoice {inv_id} exists on supplier statement but is absent from internal ledger.",
@@ -348,10 +352,12 @@ def reconcile(
 
     # ── Build summary KPIs ────────────────────────────────────────────────────
     categories = [li.category for li in line_items]
-    mismatch_variances = [
+    # Total variance = sum of ALL discrepancies (mismatches + missing + credits),
+    # i.e. total unreconciled exposure between supplier statement and ledger.
+    total_variance = sum(
         li.variance for li in line_items
-        if li.category == FLAGGED_AMOUNT_MISMATCH and li.variance is not None
-    ]
+        if li.category != MATCHED and li.variance is not None
+    )
 
     summary = ReconciliationSummary(
         total_supplier_lines=len(line_items),
@@ -359,7 +365,7 @@ def reconcile(
         count_amount_mismatch=categories.count(FLAGGED_AMOUNT_MISMATCH),
         count_missing_in_ledger=categories.count(FLAGGED_MISSING_IN_LEDGER),
         count_unapplied_credit=categories.count(FLAGGED_UNAPPLIED_CREDIT),
-        total_variance=sum(mismatch_variances),
+        total_variance=total_variance,
     )
 
     logger.info(
