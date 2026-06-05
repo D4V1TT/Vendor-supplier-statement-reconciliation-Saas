@@ -76,6 +76,7 @@ class JobStatusEnum(str, Enum):
 class ReconciliationJobResponse(BaseModel):
     id:                      uuid.UUID
     status:                  JobStatusEnum
+    created_at:              str | None = None
     statement_id:            uuid.UUID
     ledger_id:               uuid.UUID
     error_message:           str | None = None

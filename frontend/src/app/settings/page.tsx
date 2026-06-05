@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { AuthGuard } from "@/components/AuthGuard";
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -70,6 +71,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <AuthGuard>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar />
       <main className="flex-1 ml-60 overflow-y-auto">
@@ -185,5 +187,6 @@ export default function SettingsPage() {
         </div>
       </main>
     </div>
+    </AuthGuard>
   );
 }

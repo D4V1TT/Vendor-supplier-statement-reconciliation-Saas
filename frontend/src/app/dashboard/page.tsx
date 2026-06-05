@@ -3,6 +3,7 @@
 import React, { useCallback, useState } from "react";
 import { api, type ExceptionsReport } from "@/lib/api";
 import { Sidebar }          from "@/components/Sidebar";
+import { AuthGuard }        from "@/components/AuthGuard";
 import { DropZone }         from "@/components/DropZone";
 import { KpiCard }          from "@/components/KpiCard";
 import { ExceptionsTable }  from "@/components/ExceptionsTable";
@@ -125,6 +126,7 @@ export default function DashboardPage() {
   const isProcessing = ["uploading", "extracting", "matching"].includes(stage);
 
   return (
+    <AuthGuard>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar />
 
@@ -393,5 +395,6 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
+    </AuthGuard>
   );
 }

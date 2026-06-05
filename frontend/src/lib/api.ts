@@ -3,10 +3,12 @@
  * All requests attach the JWT from localStorage.
  */
 
+import { getToken } from "./auth";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
@@ -69,22 +71,41 @@ export interface Job {
   status: "pending" | "running" | "completed" | "failed";
 }
 
+export interface JobListItem {
+  id:                      string;
+  status:                  string;
+  created_at:              string;
+  statement_id:            string;
+  ledger_id:               string;
+  total_supplier_lines:    number | null;
+  count_matched:           number | null;
+  count_amount_mismatch:   number | null;
+  count_missing_in_ledger: number | null;
+  count_unapplied_credit:  number | null;
+  total_variance:          number | null;
+  // joined from statement
+  vendor_name?:            string;
+}
+
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 
 export const api = {
   uploadStatement: (form: FormData) =>
     fetch(`${BASE}/upload/statement`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      headers: { Authorization: `Bearer ${getToken()}` },
       body: form,
     }).then((r) => r.json()),
 
   uploadLedger: (form: FormData) =>
     fetch(`${BASE}/upload/ledger`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      headers: { Authorization: `Bearer ${getToken()}` },
       body: form,
     }).then((r) => r.json()),
+
+  listJobs: () =>
+    request<JobListItem[]>("/jobs"),
 
   reconcile: (statement_id: string, ledger_id: string) =>
     request<Job>("/reconcile", {

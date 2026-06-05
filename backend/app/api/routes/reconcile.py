@@ -8,6 +8,7 @@ import uuid
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
@@ -123,6 +124,31 @@ async def upload_ledger(
     await db.commit()
     await db.refresh(record)
     return record
+
+
+# ── Job List ──────────────────────────────────────────────────────────────────
+
+@router.get("/jobs")
+async def list_jobs(
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Return all reconciliation jobs for the current company, newest first, with vendor name."""
+    result = await db.execute(
+        select(ReconciliationJob, UploadedStatement.vendor_name)
+        .join(UploadedStatement, ReconciliationJob.statement_id == UploadedStatement.id)
+        .where(ReconciliationJob.company_id == current_user.company_id)
+        .order_by(ReconciliationJob.created_at.desc())
+        .limit(100)
+    )
+    rows = result.all()
+    out = []
+    for job, vendor_name in rows:
+        d = ReconciliationJobResponse.model_validate(job).model_dump(mode="json")
+        d["vendor_name"]  = vendor_name
+        d["created_at"]   = job.created_at.isoformat()
+        out.append(d)
+    return out
 
 
 # ── Reconciliation ─────────────────────────────────────────────────────────────
