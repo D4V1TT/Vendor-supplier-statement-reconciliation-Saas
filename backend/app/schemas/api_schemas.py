@@ -6,6 +6,7 @@ These are the contracts between FastAPI and the frontend.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -76,7 +77,7 @@ class JobStatusEnum(str, Enum):
 class ReconciliationJobResponse(BaseModel):
     id:                      uuid.UUID
     status:                  JobStatusEnum
-    created_at:              str | None = None
+    created_at:              datetime | None = None
     statement_id:            uuid.UUID
     ledger_id:               uuid.UUID
     error_message:           str | None = None
