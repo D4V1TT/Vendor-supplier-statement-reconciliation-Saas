@@ -10,6 +10,7 @@ import { KpiCard }          from "@/components/KpiCard";
 import { ExceptionsTable }  from "@/components/ExceptionsTable";
 import { ProgressStepper, type StepId } from "@/components/ProgressStepper";
 import { ColumnMapper, type DetectionResult } from "@/components/ColumnMapper";
+import { MappingChips }    from "@/components/MappingChips";
 import { MatchedTable }    from "@/components/MatchedTable";
 
 type Stage = "idle" | "detecting" | "mapping" | "uploading" | "extracting" | "matching" | "done" | "error";
@@ -210,42 +211,34 @@ export default function DashboardPage() {
               {/* Drop zones */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Vendor Statement</p>
-                    {stmtMapping && !stmtDetection?.needs_user_confirmation && (
-                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 ring-1 ring-emerald-200">Columns mapped ✓</span>
-                    )}
-                    {stmtDetection?.needs_user_confirmation && !stmtMapping && (
-                      <button type="button" onClick={() => setMappingTarget("statement")}
-                        className="text-[10px] font-semibold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 ring-1 ring-amber-200 hover:bg-amber-100 transition-colors">
-                        Review mapping ⚠
-                      </button>
-                    )}
-                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 px-1">Vendor Statement</p>
                   <DropZone label="Drop vendor statement here" hint="Drag & drop or click to browse"
                     accept=".pdf,.xlsx,.xls,.csv,.txt,.tsv,.ods"
                     icon={Icons.document} accentColor="indigo"
                     file={statementFile}
                     onFile={f => detectFile(f, "statement")} />
+                  {stmtDetection && (
+                    <MappingChips
+                      detection={stmtDetection}
+                      confirmed={stmtMapping}
+                      onEdit={() => setMappingTarget("statement")}
+                    />
+                  )}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Internal AP Ledger</p>
-                    {ledgerMapping && !ledgerDetection?.needs_user_confirmation && (
-                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 ring-1 ring-emerald-200">Columns mapped ✓</span>
-                    )}
-                    {ledgerDetection?.needs_user_confirmation && !ledgerMapping && (
-                      <button type="button" onClick={() => setMappingTarget("ledger")}
-                        className="text-[10px] font-semibold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 ring-1 ring-amber-200 hover:bg-amber-100 transition-colors">
-                        Review mapping ⚠
-                      </button>
-                    )}
-                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 px-1">Internal AP Ledger</p>
                   <DropZone label="Drop AP ledger export here" hint="Drag & drop or click to browse"
                     accept=".csv,.xlsx,.xls,.txt,.tsv,.ods"
                     icon={Icons.table} accentColor="violet"
                     file={ledgerFile}
                     onFile={f => detectFile(f, "ledger")} />
+                  {ledgerDetection && (
+                    <MappingChips
+                      detection={ledgerDetection}
+                      confirmed={ledgerMapping}
+                      onEdit={() => setMappingTarget("ledger")}
+                    />
+                  )}
                 </div>
               </div>
 

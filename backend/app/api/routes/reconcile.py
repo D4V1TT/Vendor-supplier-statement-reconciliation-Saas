@@ -3,6 +3,7 @@ Core reconciliation routes — Section 5.
 """
 
 import io
+import math
 import uuid
 
 import pandas as pd
@@ -10,6 +11,21 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _json_safe_records(df: pd.DataFrame) -> list[dict]:
+    """
+    Convert a DataFrame to JSON/JSONB-safe records.
+    pandas NaN/inf are invalid JSON tokens for PostgreSQL JSONB → replace with None.
+    """
+    records = df.to_dict(orient="records")
+    for row in records:
+        for key, val in row.items():
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                row[key] = None
+            elif pd.isna(val):
+                row[key] = None
+    return records
 
 from app.api.deps import get_current_user, get_db
 from app.core.security import encrypt_file
@@ -128,7 +144,7 @@ async def upload_statement(
             method         = result.method
         else:
             df             = parse_ledger_file(raw_bytes, file.filename or "upload.csv")
-            extracted_data = {"line_items": df.to_dict(orient="records")}
+            extracted_data = {"line_items": _json_safe_records(df)}
             confidence     = 1.0
             method         = "tabular"
     except (RuntimeError, ValueError) as exc:
@@ -183,7 +199,7 @@ async def upload_ledger(
         file_size_bytes=len(raw_bytes),
         row_count=len(df),
         column_mapping=col_map,
-        parsed_data={"rows": df.to_dict(orient="records")},
+        parsed_data={"rows": _json_safe_records(df)},
     )
     db.add(record)
     await db.commit()
