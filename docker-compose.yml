@@ -41,8 +41,18 @@ services:
 
   frontend:
     build: ./frontend
+    command: npm run dev
     ports: ["3000:3000"]
+    # Volume mount so file edits reflect instantly without rebuilding
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules      # keep container's node_modules, don't overwrite with host
+      - /app/.next             # keep Next.js build cache inside container
     environment:
+      # NEXT_PUBLIC_ vars are inlined at build time by Next.js.
+      # From the BROWSER the API is reached via the host machine's localhost,
+      # so this must be the address the user's browser can reach — not the
+      # Docker internal hostname.
       NEXT_PUBLIC_API_URL: http://localhost:8000/api
     depends_on: [api]
 
