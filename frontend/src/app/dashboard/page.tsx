@@ -11,6 +11,7 @@ import { ExceptionsTable }  from "@/components/ExceptionsTable";
 import { ProgressStepper, type StepId } from "@/components/ProgressStepper";
 import { ColumnMapper, type DetectionResult } from "@/components/ColumnMapper";
 import { MappingChips }    from "@/components/MappingChips";
+import { ColumnAlignment } from "@/components/ColumnAlignment";
 import { MatchedTable }    from "@/components/MatchedTable";
 
 type Stage = "idle" | "detecting" | "mapping" | "uploading" | "extracting" | "matching" | "done" | "error";
@@ -241,6 +242,16 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
+
+              {/* Cross-file column alignment — shown once BOTH files are detected */}
+              {stmtDetection && ledgerDetection && (
+                <ColumnAlignment
+                  statement={stmtDetection}
+                  ledger={ledgerDetection}
+                  statementConfirmed={stmtMapping}
+                  ledgerConfirmed={ledgerMapping}
+                />
+              )}
 
               {error && (
                 <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 animate-pop-in">
