@@ -138,36 +138,39 @@ def _extract_with_pdfplumber(pdf_bytes: bytes) -> ExtractionResult | None:
             for table in tables:
                 if not table:
                     continue
-
-                # First row with content becomes the header
+                # First row with >=2 non-empty cells becomes the header.
                 if not headers:
                     candidate = [str(c).strip() if c else "" for c in table[0]]
-                    # Only treat as header if it contains recognisable invoice keywords
-                    combined = " ".join(candidate).lower()
-                    if any(kw in combined for kw in ("invoice", "ref", "amount", "balance", "date")):
+                    if sum(1 for c in candidate if c) >= 2:
                         headers = candidate
                         all_rows.extend(table[1:])
                         continue
-
                 all_rows.extend(table)
 
     if not headers or not all_rows:
         return None
 
-    # Build DataFrame from raw table
-    df = pd.DataFrame(all_rows, columns=headers[: len(all_rows[0])])
-    rename_map = _normalise_headers(list(df.columns))
-    df.rename(columns=rename_map, inplace=True)
+    # Build DataFrame from the raw table, then let the smart detector map columns
+    # (handles any column naming — Inv #, Total, Net Value, Doc_Ref_Num, …).
+    width = len(headers)
+    norm_rows = [(r + [None] * width)[:width] for r in all_rows]
+    raw_df = pd.DataFrame(norm_rows, columns=[h or f"col_{i}" for i, h in enumerate(headers)])
 
-    required = {"invoice_id", "amount"}
-    if not required.issubset(df.columns):
-        logger.debug("pdfplumber: required columns not found after rename. Got: %s", list(df.columns))
+    from app.engine.column_detector import detect_columns  # noqa: PLC0415
+    detected = detect_columns(raw_df)
+    if detected.missing_required:
+        logger.debug("pdfplumber: required columns not detected. Got: %s", list(raw_df.columns))
         return None
 
+    df = detected.apply(raw_df)
     if "balance_due" not in df.columns:
         df["balance_due"] = None
     if "invoice_date" not in df.columns:
         df["invoice_date"] = None
+    if "amount" not in df.columns:   # debit/credit case
+        debit  = pd.to_numeric(df["debit"].astype(str).str.replace(r"[^\d.\-]", "", regex=True), errors="coerce")  if "debit"  in df.columns else 0
+        credit = pd.to_numeric(df["credit"].astype(str).str.replace(r"[^\d.\-]", "", regex=True), errors="coerce") if "credit" in df.columns else 0
+        df["amount"] = (debit.abs().fillna(0) if hasattr(debit, "abs") else 0) - (credit.abs().fillna(0) if hasattr(credit, "abs") else 0)
 
     # Drop rows where invoice_id is blank (totals/subtotals lines)
     df = df[df["invoice_id"].astype(str).str.strip().ne("")]

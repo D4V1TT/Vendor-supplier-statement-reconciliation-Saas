@@ -45,3 +45,5 @@ anthropic==0.26.0
 pytest==8.2.0
 pytest-asyncio==0.23.6
 httpx==0.27.0
+reportlab==4.2.0                  # synthetic PDF test-fixture generation
+faker==25.2.0                     # realistic vendor names / random data

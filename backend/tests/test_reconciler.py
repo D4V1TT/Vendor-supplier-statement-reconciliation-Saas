@@ -120,7 +120,11 @@ def test_mixed_scenario():
     assert s.count_amount_mismatch   == 1
     assert s.count_missing_in_ledger == 1
     assert s.count_unapplied_credit  == 1
-    assert s.total_variance          == pytest.approx(20.00)
+    # total_variance = sum of ALL discrepancies:
+    #   mismatch INV-002: 500 - 480       = +20
+    #   missing  INV-003: 750 - 0         = +750
+    #   credit   CN-001 : -100 - 0        = -100
+    assert s.total_variance          == pytest.approx(670.00)
     assert s.exception_count         == 3
     assert s.match_rate_pct          == 25.0
 
@@ -151,8 +155,20 @@ def test_empty_ledger():
     assert report.summary.count_missing_in_ledger == 1
 
 
-def test_missing_required_column_raises():
-    bad_df = pd.DataFrame({"invoice_number": ["INV-001"], "value": [100]})
+def test_smart_detector_maps_synonyms():
+    """The detector should map 'invoice_number' → invoice_id and 'value' → amount."""
+    supplier = pd.DataFrame({"invoice_number": ["INV-001"], "value": [100]})
+    ledger   = make_ledger(("INV-001", 100))
+    report   = reconcile(supplier, ledger)
+    assert report.summary.count_matched == 1
+
+
+def test_unmappable_columns_raise():
+    """Columns with no recognisable name OR data shape can't be reconciled."""
+    bad_df = pd.DataFrame({
+        "notes":   ["a long free text comment here", "another lengthy remark line"],
+        "comment": ["more descriptive prose text", "yet another sentence of words"],
+    })
     ledger = make_ledger(("INV-001", 100))
-    with pytest.raises(ValueError, match="missing required columns"):
+    with pytest.raises(ValueError, match="could not identify required columns"):
         reconcile(bad_df, ledger)

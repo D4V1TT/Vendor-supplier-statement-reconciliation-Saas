@@ -32,6 +32,9 @@ uploads/
 *.sqlite
 *.db
 
+# ── Generated test fixtures (regenerate with tests/generate_fixtures.py) ──────
+backend/tests/fixtures/
+
 # ── OS / editor ───────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
