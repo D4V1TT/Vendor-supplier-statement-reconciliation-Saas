@@ -492,13 +492,40 @@ def _parse_text_lines_to_items(lines: list[str]) -> tuple[list[StatementLineItem
 CONFIDENCE_THRESHOLD = 0.60
 
 
-def extract_statement(pdf_bytes: bytes) -> ExtractionResult:
+def extract_statement(pdf_bytes: bytes, method: str = "auto") -> ExtractionResult:
     """
-    Main entry point.  Applies the waterfall strategy:
-      pdfplumber → OCR → LLM
+    Main entry point.
 
-    Raises RuntimeError only if all three strategies fail (should be rare).
+    method:
+      "auto"       → waterfall: pdfplumber → OCR → LLM (default)
+      "pdfplumber" → text-layer extraction only
+      "ocr"        → coordinate-grid OCR only
+      "llm"        → send to Claude only
+
+    Raises RuntimeError if the chosen strategy (or all, for "auto") fail.
     """
+    method = (method or "auto").lower()
+
+    # ── Forced single-strategy modes ──────────────────────────────────────────
+    if method == "pdfplumber":
+        result = _extract_with_pdfplumber(pdf_bytes)
+        if result and result.line_items:
+            return result
+        raise RuntimeError("pdfplumber found no table. Try 'Auto' or 'OCR' extraction.")
+
+    if method == "ocr":
+        result = _extract_with_ocr(pdf_bytes)
+        if result and result.line_items:
+            return result
+        raise RuntimeError("OCR found no table. Try 'Auto' extraction.")
+
+    if method == "llm":
+        # Get raw text first (pdfplumber/ocr) to feed the LLM
+        pre = _extract_with_pdfplumber(pdf_bytes) or _extract_with_ocr(pdf_bytes)
+        raw_text = pre.raw_text if pre else ""
+        return _extract_with_llm(pdf_bytes, raw_text)
+
+    # ── Auto waterfall ────────────────────────────────────────────────────────
     # Strategy 1: pdfplumber (text-layer PDFs)
     result = _extract_with_pdfplumber(pdf_bytes)
     if result and result.confidence >= CONFIDENCE_THRESHOLD:

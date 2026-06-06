@@ -6,6 +6,26 @@ import { Sidebar } from "@/components/Sidebar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { api } from "@/lib/api";
 
+// ── Label ↔ backend-value maps ────────────────────────────────────────────────
+const CURRENCY_OPTIONS = [
+  "USD — US Dollar", "GBP — British Pound", "EUR — Euro",
+  "AED — UAE Dirham", "SAR — Saudi Riyal", "CAD — Canadian Dollar", "AUD — Australian Dollar",
+];
+const LABEL_TO_CURRENCY: Record<string, string> = Object.fromEntries(
+  CURRENCY_OPTIONS.map(l => [l, l.split(" ")[0]])
+);
+const CURRENCY_TO_LABEL: Record<string, string> = Object.fromEntries(
+  CURRENCY_OPTIONS.map(l => [l.split(" ")[0], l])
+);
+
+const METHOD_OPTIONS = ["Auto (recommended)", "pdfplumber only", "OCR only", "LLM only"];
+const LABEL_TO_METHOD: Record<string, string> = {
+  "Auto (recommended)": "auto", "pdfplumber only": "pdfplumber", "OCR only": "ocr", "LLM only": "llm",
+};
+const METHOD_TO_LABEL: Record<string, string> = {
+  auto: "Auto (recommended)", pdfplumber: "pdfplumber only", ocr: "OCR only", llm: "LLM only",
+};
+
 // ── Reusable field layout ─────────────────────────────────────────────────────
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -109,6 +129,30 @@ export default function SettingsPage() {
       .catch(() => { /* leave blank if not reachable yet */ });
   }, []);
 
+  // Load company-wide reconciliation settings
+  useEffect(() => {
+    api.getSettings()
+      .then(st => {
+        setCurrency(CURRENCY_TO_LABEL[st.default_currency] ?? "USD — US Dollar");
+        setTolerance(String(st.amount_tolerance));
+        setPdfMethod(METHOD_TO_LABEL[st.pdf_extraction_method] ?? "Auto (recommended)");
+        setFlagCredits(st.flag_unapplied_credits);
+        setAutoExport(st.auto_export);
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
+
+  // Load saved notification preferences
+  useEffect(() => {
+    api.getNotifications()
+      .then(p => {
+        setNotifyComplete(p.notify_on_completion);
+        setNotifyException(p.notify_on_exceptions);
+        setNotifyWeekly(p.notify_weekly_digest);
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
+
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
 
   async function handleSave() {
@@ -128,6 +172,20 @@ export default function SettingsPage() {
       if (companyName.trim()) {
         await api.updateCompany(companyName.trim());
       }
+      // Persist notification preferences
+      await api.updateNotifications({
+        notify_on_completion: notifyComplete,
+        notify_on_exceptions: notifyException,
+        notify_weekly_digest: notifyWeekly,
+      });
+      // Persist company-wide reconciliation settings
+      await api.updateSettings({
+        default_currency:       LABEL_TO_CURRENCY[currency] ?? "USD",
+        amount_tolerance:       parseFloat(tolerance) || 0.01,
+        pdf_extraction_method:  (LABEL_TO_METHOD[pdfMethod] ?? "auto") as any,
+        flag_unapplied_credits: flagCredits,
+        auto_export:            autoExport,
+      });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 2500);
     } catch (err: any) {
@@ -234,7 +292,7 @@ export default function SettingsPage() {
                 <Select
                   value={currency}
                   onChange={setCurrency}
-                  options={["USD — US Dollar", "GBP — British Pound", "EUR — Euro", "AED — UAE Dirham", "SAR — Saudi Riyal", "CAD — Canadian Dollar", "AUD — Australian Dollar"]}
+                  options={CURRENCY_OPTIONS}
                 />
               </Field>
             </Section>
@@ -258,7 +316,7 @@ export default function SettingsPage() {
                 <Select
                   value={pdfMethod}
                   onChange={setPdfMethod}
-                  options={["Auto (recommended)", "pdfplumber only", "OCR only", "LLM only"]}
+                  options={METHOD_OPTIONS}
                 />
               </Field>
               <Field label="Flag unapplied credits" hint="Mark credit notes not in the ledger as exceptions">

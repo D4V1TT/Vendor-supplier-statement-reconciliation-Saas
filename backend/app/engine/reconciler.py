@@ -236,6 +236,7 @@ def reconcile(
     supplier_df: pd.DataFrame,
     ledger_df: pd.DataFrame,
     amount_tolerance: float = AMOUNT_TOLERANCE,
+    flag_unapplied_credits: bool = True,
 ) -> ReconciliationReport:
     """
     Perform line-by-line reconciliation of supplier_df against ledger_df.
@@ -278,7 +279,8 @@ def reconcile(
         ledger_amount: float | None = ledger_index.get(inv_id)
 
         # ── Rule 4 (checked before Rule 3 to catch credits not in ledger) ─────
-        if ledger_amount is None and supp_amount < 0:
+        # Only applies when the company has "flag unapplied credits" enabled.
+        if flag_unapplied_credits and ledger_amount is None and supp_amount < 0:
             # Ledger has no entry → ledger value is effectively 0, so the full
             # supplier amount is the discrepancy (variance = supplier - 0).
             line_items.append(
@@ -296,6 +298,11 @@ def reconcile(
                     ),
                 )
             )
+            continue
+
+        # Credit-flagging disabled: ignore credits absent from the ledger
+        # (don't let them fall through to Rule 3 as "Missing").
+        if not flag_unapplied_credits and ledger_amount is None and supp_amount < 0:
             continue
 
         # ── Rule 3 ────────────────────────────────────────────────────────────

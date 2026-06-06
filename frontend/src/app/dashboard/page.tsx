@@ -136,6 +136,13 @@ export default function DashboardPage() {
           const rpt = await api.getReport(job.id);
           setReport(rpt);
           setStage("done");
+          // Auto-export to Excel if the company setting is enabled
+          try {
+            const settings = await api.getSettings();
+            if (settings.auto_export) {
+              await api.downloadExport(job.id, vendorName);
+            }
+          } catch { /* non-fatal */ }
           return;
         }
       }

@@ -56,7 +56,17 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
             supplier_df = pd.DataFrame(statement.extracted_data["line_items"])
             ledger_df   = pd.DataFrame(ledger.parsed_data["rows"])
 
-            report = reconcile(supplier_df, ledger_df)
+            # Apply the company's reconciliation defaults
+            from app.db.models.models import Company  # noqa: PLC0415
+            company = await db.get(Company, job.company_id)
+            tolerance     = float(company.amount_tolerance) if company else 0.01
+            flag_credits  = company.flag_unapplied_credits if company else True
+
+            report = reconcile(
+                supplier_df, ledger_df,
+                amount_tolerance=tolerance,
+                flag_unapplied_credits=flag_credits,
+            )
             report_dict = report.to_dict()
             s = report.summary
 
@@ -78,6 +88,42 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
             job.error_message = str(exc)
 
         await db.commit()
+
+        # ── Send notification email if the user opted in ──────────────────────
+        if job.status == JobStatus.COMPLETED:
+            await _maybe_send_completion_email(db, job)
+
+
+async def _maybe_send_completion_email(db: AsyncSession, job: ReconciliationJob) -> None:
+    """Send a completion email respecting the creating user's preferences."""
+    from app.core.email import reconciliation_complete_email, send_email  # noqa: PLC0415
+    from app.db.models.models import User  # noqa: PLC0415
+
+    user = await db.get(User, job.created_by)
+    if not user or not user.email:
+        return
+
+    exceptions = (job.count_amount_mismatch or 0) + (job.count_missing_in_ledger or 0) + (job.count_unapplied_credit or 0)
+
+    # Decide whether to send based on the user's toggles
+    want_completion = user.notify_on_completion
+    want_exceptions = user.notify_on_exceptions and exceptions > 0
+    if not (want_completion or want_exceptions):
+        logger.info("Job %s: user opted out of emails — skipping.", job.id)
+        return
+
+    statement = await db.get(UploadedStatement, job.statement_id)
+    vendor    = statement.vendor_name if statement else "Vendor"
+    summary   = {
+        "total_supplier_lines":    job.total_supplier_lines or 0,
+        "count_matched":           job.count_matched or 0,
+        "count_amount_mismatch":   job.count_amount_mismatch or 0,
+        "count_missing_in_ledger": job.count_missing_in_ledger or 0,
+        "count_unapplied_credit":  job.count_unapplied_credit or 0,
+        "exception_count":         exceptions,
+    }
+    subject, html = reconciliation_complete_email(vendor, summary, str(job.id))
+    send_email(user.email, subject, html)
 
 
 # ── Enqueue Helper (called from FastAPI) ──────────────────────────────────────

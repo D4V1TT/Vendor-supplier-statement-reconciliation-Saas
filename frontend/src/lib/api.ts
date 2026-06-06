@@ -85,6 +85,20 @@ export interface Job {
   status: "pending" | "running" | "completed" | "failed";
 }
 
+export interface NotificationPrefs {
+  notify_on_completion: boolean;
+  notify_on_exceptions: boolean;
+  notify_weekly_digest: boolean;
+}
+
+export interface ReconSettings {
+  default_currency:       string;
+  amount_tolerance:       number;
+  pdf_extraction_method:  "auto" | "pdfplumber" | "ocr" | "llm";
+  flag_unapplied_credits: boolean;
+  auto_export:            boolean;
+}
+
 export interface JobListItem {
   id:                      string;
   status:                  string;
@@ -136,6 +150,24 @@ export const api = {
 
   listJobs: () =>
     request<JobListItem[]>("/jobs"),
+
+  getSettings: () =>
+    request<ReconSettings>("/settings"),
+
+  updateSettings: (settings: Partial<ReconSettings>) =>
+    request<ReconSettings>("/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+
+  getNotifications: () =>
+    request<NotificationPrefs>("/notifications"),
+
+  updateNotifications: (prefs: Partial<NotificationPrefs>) =>
+    request<NotificationPrefs>("/notifications", {
+      method: "PUT",
+      body: JSON.stringify(prefs),
+    }),
 
   getCompany: () =>
     request<{ id: string; name: string; slug: string }>("/company"),

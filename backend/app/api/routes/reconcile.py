@@ -86,6 +86,94 @@ async def update_company(
     return {"id": str(company.id), "name": company.name, "slug": company.slug}
 
 
+# ── Reconciliation Settings (company-wide defaults) ───────────────────────────
+
+def _settings_dict(c: Company) -> dict:
+    return {
+        "default_currency":       c.default_currency,
+        "amount_tolerance":       float(c.amount_tolerance),
+        "pdf_extraction_method":  c.pdf_extraction_method,
+        "flag_unapplied_credits": c.flag_unapplied_credits,
+        "auto_export":            c.auto_export,
+    }
+
+
+@router.get("/settings")
+async def get_settings(
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    company = await db.get(Company, current_user.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return _settings_dict(company)
+
+
+@router.put("/settings")
+async def update_settings(
+    payload:      dict,
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    company = await db.get(Company, current_user.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    if "default_currency" in payload:
+        company.default_currency = str(payload["default_currency"])[:8]
+    if "amount_tolerance" in payload:
+        try:
+            company.amount_tolerance = max(0.0, float(payload["amount_tolerance"]))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="amount_tolerance must be a number.")
+    if "pdf_extraction_method" in payload:
+        method = str(payload["pdf_extraction_method"]).lower()
+        if method not in {"auto", "pdfplumber", "ocr", "llm"}:
+            raise HTTPException(status_code=422, detail="Invalid pdf_extraction_method.")
+        company.pdf_extraction_method = method
+    if "flag_unapplied_credits" in payload:
+        company.flag_unapplied_credits = bool(payload["flag_unapplied_credits"])
+    if "auto_export" in payload:
+        company.auto_export = bool(payload["auto_export"])
+
+    await db.commit()
+    await db.refresh(company)
+    return _settings_dict(company)
+
+
+# ── Notification Preferences ──────────────────────────────────────────────────
+
+@router.get("/notifications")
+async def get_notifications(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "notify_on_completion": current_user.notify_on_completion,
+        "notify_on_exceptions": current_user.notify_on_exceptions,
+        "notify_weekly_digest": current_user.notify_weekly_digest,
+    }
+
+
+@router.put("/notifications")
+async def update_notifications(
+    payload:      dict,
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    if "notify_on_completion" in payload:
+        current_user.notify_on_completion = bool(payload["notify_on_completion"])
+    if "notify_on_exceptions" in payload:
+        current_user.notify_on_exceptions = bool(payload["notify_on_exceptions"])
+    if "notify_weekly_digest" in payload:
+        current_user.notify_weekly_digest = bool(payload["notify_weekly_digest"])
+    await db.commit()
+    return {
+        "notify_on_completion": current_user.notify_on_completion,
+        "notify_on_exceptions": current_user.notify_on_exceptions,
+        "notify_weekly_digest": current_user.notify_weekly_digest,
+    }
+
+
 # ── File Uploads ───────────────────────────────────────────────────────────────
 
 @router.post("/detect-columns")
@@ -135,10 +223,14 @@ async def upload_statement(
     storage_key = f"statements/{current_user.company_id}/{uuid.uuid4()}/{file.filename}"
     await write_file(storage_key, encrypted)
 
+    # Company's chosen PDF extraction strategy (auto / pdfplumber / ocr / llm)
+    company = await db.get(Company, current_user.company_id)
+    pdf_method = (company.pdf_extraction_method if company else "auto") or "auto"
+
     fname_lower = (file.filename or "").lower()
     try:
         if fname_lower.endswith(".pdf"):
-            result         = extract_statement(raw_bytes)
+            result         = extract_statement(raw_bytes, method=pdf_method)
             extracted_data = {"line_items": [li.model_dump(mode="json") for li in result.line_items]}
             confidence     = result.confidence
             method         = result.method

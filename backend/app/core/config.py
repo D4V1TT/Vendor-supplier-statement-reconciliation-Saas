@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     # Clerk Dashboard → API Keys → Advanced → JWKS URL
     CLERK_JWKS_URL: str = ""
 
+    # ── Email (SMTP) ──────────────────────────────────────────────────────────
+    # Leave SMTP_HOST blank to disable email (the app logs instead of sending).
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "VendorRecon <noreply@vendorrecon.app>"
+    SMTP_USE_TLS: bool = True
+
     # ── AI Fallback (Anthropic) ───────────────────────────────────────────────
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"

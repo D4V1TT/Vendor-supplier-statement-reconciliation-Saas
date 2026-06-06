@@ -56,6 +56,13 @@ class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     slug: Mapped[str]  = mapped_column(String(100), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # ── Reconciliation defaults (applied to every run) ────────────────────────
+    default_currency:      Mapped[str]  = mapped_column(String(8), default="USD")
+    amount_tolerance:      Mapped[float] = mapped_column(Numeric(10, 4), default=0.01)
+    pdf_extraction_method: Mapped[str]  = mapped_column(String(20), default="auto")  # auto|pdfplumber|ocr|llm
+    flag_unapplied_credits: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_export:           Mapped[bool] = mapped_column(Boolean, default=False)
+
     users: Mapped[list["User"]] = relationship("User", back_populates="company")
     statements: Mapped[list["UploadedStatement"]] = relationship(
         "UploadedStatement", back_populates="company"
@@ -86,6 +93,11 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     full_name: Mapped[str]        = mapped_column(String(255), nullable=False)
     role: Mapped[str]             = mapped_column(String(50), default="admin")
     is_active: Mapped[bool]       = mapped_column(Boolean, default=True)
+
+    # Notification preferences (defaults: completion + exceptions on, digest off)
+    notify_on_completion: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_on_exceptions: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_weekly_digest: Mapped[bool] = mapped_column(Boolean, default=False)
 
     company: Mapped["Company"] = relationship("Company", back_populates="users")
 
