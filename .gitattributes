@@ -1,0 +1,3 @@
+# Force shell scripts to LF so they run on Linux (Railway) regardless of the
+# OS they were committed from. Prevents "CRLF" breakage of start.sh.
+*.sh text eol=lf
