@@ -190,9 +190,28 @@ async def detect_columns_endpoint(
     from app.engine.column_detector import detect_columns  # noqa: PLC0415
 
     raw_bytes = await file.read()
+    fname = (file.filename or "upload.csv").lower()
+
     try:
-        df = parse_ledger_file(raw_bytes, file.filename or "upload.csv")
-    except ValueError as exc:
+        if fname.endswith(".pdf"):
+            # Run the same PDF extraction the upload would use, honoring the
+            # company's chosen method, so the preview reflects reality.
+            company = await db.get(Company, current_user.company_id)
+            pdf_method = (company.pdf_extraction_method if company else "auto") or "auto"
+            result = extract_statement(raw_bytes, method=pdf_method)
+            if not result.line_items:
+                raise HTTPException(
+                    status_code=422,
+                    detail="No invoice data could be extracted from this PDF. "
+                           "It may be a scanned image, password-protected, or not a statement. "
+                           "Try a different extraction method in Settings, or upload CSV/Excel.",
+                )
+            df = result.to_dataframe()
+        else:
+            df = parse_ledger_file(raw_bytes, file.filename or "upload.csv")
+    except HTTPException:
+        raise
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     detected = detect_columns(df)

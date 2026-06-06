@@ -72,14 +72,11 @@ export default function DashboardPage() {
   async function detectFile(file: File, target: "statement" | "ledger") {
     if (target === "statement") { setStatementFile(file); setStmtDetection(null); setStmtMapping(null); }
     else                        { setLedgerFile(file);   setLedgerDetection(null); setLedgerMapping(null); }
+    setError(null);
 
-    // Only run detection on tabular files (not PDFs — those go through PDF extractor)
-    if (file.name.toLowerCase().endsWith(".pdf")) return;
-
+    // Run detection on ALL file types (PDFs are extracted server-side first).
     setStage("detecting");
     try {
-      const { getToken } = await import("@/lib/api").then(m => ({ getToken: null as any }));
-      // Use the api authHeader helper via a tiny inline fetch
       const token = await (window as any).__clerkGetToken?.() ?? null;
       const form = new FormData();
       form.append("file", file);
@@ -88,9 +85,22 @@ export default function DashboardPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
-      if (!res.ok) { setStage("idle"); return; }
-      const detection: DetectionResult = await res.json();
 
+      if (!res.ok) {
+        // Surface extraction/parse failures (e.g. a PDF with no invoice data)
+        const body = await res.json().catch(() => ({}));
+        setError(
+          body?.detail ??
+          `Could not read columns from "${file.name}". Please check the file and try again.`
+        );
+        // Clear the bad file so the user must re-pick
+        if (target === "statement") setStatementFile(null);
+        else                        setLedgerFile(null);
+        setStage("idle");
+        return;
+      }
+
+      const detection: DetectionResult = await res.json();
       if (target === "statement") {
         setStmtDetection(detection);
         if (detection.needs_user_confirmation) setMappingTarget("statement");
@@ -100,7 +110,11 @@ export default function DashboardPage() {
         if (detection.needs_user_confirmation) setMappingTarget("ledger");
         else setLedgerMapping(detection.mapping);
       }
-    } catch { /* detection is best-effort — proceed without it */ }
+    } catch {
+      setError(`Could not analyse "${file.name}". The server may be unreachable.`);
+      if (target === "statement") setStatementFile(null);
+      else                        setLedgerFile(null);
+    }
     setStage("idle");
   }
 
