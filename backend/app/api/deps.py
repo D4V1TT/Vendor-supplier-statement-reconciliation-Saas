@@ -51,26 +51,37 @@ async def get_current_user(
     # ── Path A: Clerk RS256 JWT ───────────────────────────────────────────────
     if settings.CLERK_JWKS_URL:
         try:
-            from app.core.clerk_auth import verify_clerk_token  # noqa: PLC0415
+            from app.core.clerk_auth import fetch_clerk_user, verify_clerk_token  # noqa: PLC0415
             payload     = verify_clerk_token(token)
             clerk_id    = payload.get("sub", "")
+            # Email/name may be in the token (if a custom JWT template adds them)
             email       = (payload.get("email_addresses") or [{}])[0].get("email_address", "") \
                           if isinstance(payload.get("email_addresses"), list) \
-                          else payload.get("email", "")
+                          else (payload.get("email", "") or "")
             full_name   = payload.get("name", "") or payload.get("full_name", "")
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail=f"Clerk token invalid: {exc}")
 
-        # Auto-provision: find or create User + Company keyed on Clerk user ID
-        user = await db.scalar(
-            select(User).where(User.clerk_id == clerk_id)
-        )
+        def _is_placeholder(addr: str | None) -> bool:
+            return not addr or addr.endswith("@clerk.local")
+
+        # If the token didn't carry a real email, fetch it from Clerk's API.
+        if _is_placeholder(email):
+            profile = fetch_clerk_user(clerk_id)
+            email     = profile.get("email") or email
+            full_name = full_name or profile.get("full_name") or ""
+
+        user = await db.scalar(select(User).where(User.clerk_id == clerk_id))
+
         if not user:
             # First sign-in — create a company + user record
+            safe_email = email or f"{clerk_id}@clerk.local"
             company = Company(
-                name=full_name or email.split("@")[0],
-                slug=email.replace("@", "-").replace(".", "-"),
+                name=full_name or safe_email.split("@")[0],
+                slug=f"{safe_email.replace('@', '-').replace('.', '-')}-{clerk_id[-6:]}",
             )
             db.add(company)
             await db.flush()
@@ -78,12 +89,19 @@ async def get_current_user(
             user = User(
                 company_id=company.id,
                 clerk_id=clerk_id,
-                email=email or f"{clerk_id}@clerk.local",
+                email=safe_email,
                 hashed_password="",       # no password — Clerk owns auth
-                full_name=full_name or email,
+                full_name=full_name or safe_email,
                 role="admin",
             )
             db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        elif _is_placeholder(user.email) and not _is_placeholder(email):
+            # Backfill: existing user had a placeholder email — update it now.
+            user.email = email
+            if full_name:
+                user.full_name = full_name
             await db.commit()
             await db.refresh(user)
 

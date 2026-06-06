@@ -47,6 +47,45 @@ def _get_jwks() -> dict:
     return _JWKS_CACHE
 
 
+def fetch_clerk_user(clerk_id: str) -> dict:
+    """
+    Fetch a user's real profile from Clerk's Backend API.
+    Returns {"email": str|None, "full_name": str|None, "image_url": str|None}.
+
+    Requires CLERK_SECRET_KEY. Returns empty dict on any failure so callers can
+    fall back gracefully (the app still works without it).
+    """
+    if not settings.CLERK_SECRET_KEY or not clerk_id:
+        return {}
+    try:
+        resp = httpx.get(
+            f"https://api.clerk.com/v1/users/{clerk_id}",
+            headers={"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Primary email
+        email = None
+        primary_id = data.get("primary_email_address_id")
+        for e in data.get("email_addresses", []):
+            if e.get("id") == primary_id:
+                email = e.get("email_address")
+                break
+        if not email and data.get("email_addresses"):
+            email = data["email_addresses"][0].get("email_address")
+
+        first = data.get("first_name") or ""
+        last  = data.get("last_name") or ""
+        full_name = (f"{first} {last}").strip() or (email.split("@")[0] if email else None)
+
+        return {"email": email, "full_name": full_name, "image_url": data.get("image_url")}
+    except Exception as exc:
+        logger.warning("Clerk user fetch failed for %s: %s", clerk_id, exc)
+        return {}
+
+
 def verify_clerk_token(token: str) -> dict:
     """
     Verifies a Clerk session JWT.

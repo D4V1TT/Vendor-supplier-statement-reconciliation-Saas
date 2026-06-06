@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # ── Clerk ─────────────────────────────────────────────────────────────────
     # Clerk Dashboard → API Keys → Advanced → JWKS URL
     CLERK_JWKS_URL: str = ""
+    # Clerk Dashboard → API Keys → Secret keys (sk_test_… / sk_live_…)
+    # Used to fetch the user's real email/name from Clerk's Backend API.
+    CLERK_SECRET_KEY: str = ""
 
     # ── Email (SMTP) ──────────────────────────────────────────────────────────
     # Leave SMTP_HOST blank to disable email (the app logs instead of sending).
