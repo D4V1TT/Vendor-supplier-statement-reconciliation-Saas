@@ -109,4 +109,11 @@ async def get_current_user(
     await db.execute(
         text(f"SET LOCAL app.current_company_id = '{user.company_id}'")
     )
+
+    # Gate the LLM fallback by the company's billing plan (flows via contextvar
+    # through the whole engine call stack for this request).
+    from app.core.llm_gate import plan_allows_llm, set_llm_allowed  # noqa: PLC0415
+    company = await db.get(Company, user.company_id)
+    set_llm_allowed(plan_allows_llm(company.plan if company else "free"))
+
     return user

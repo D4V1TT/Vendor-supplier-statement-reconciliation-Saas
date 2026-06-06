@@ -13,6 +13,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+# Hard cap on uploaded file size (authenticated). Large files are rejected with
+# a clean message instead of tying up workers / risking OOM.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024   # 25 MB
+
+
+def _check_size(raw: bytes, filename: str) -> None:
+    if len(raw) > MAX_UPLOAD_BYTES:
+        mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"\"{filename}\" is too large (limit {mb} MB). "
+                   "Please split the file or export a smaller date range.",
+        )
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"\"{filename}\" is empty.")
+
+
 def _clean_dicts(rows: list[dict]) -> list[dict]:
     """Replace NaN/inf/NaT in a list of dicts with None for valid JSON."""
     out = []
@@ -105,12 +122,15 @@ async def update_company(
 # ── Reconciliation Settings (company-wide defaults) ───────────────────────────
 
 def _settings_dict(c: Company) -> dict:
+    from app.core.llm_gate import plan_allows_llm  # noqa: PLC0415
     return {
         "default_currency":       c.default_currency,
         "amount_tolerance":       float(c.amount_tolerance),
         "pdf_extraction_method":  c.pdf_extraction_method,
         "flag_unapplied_credits": c.flag_unapplied_credits,
         "auto_export":            c.auto_export,
+        "plan":                   c.plan,
+        "llm_enabled":            plan_allows_llm(c.plan),
     }
 
 
@@ -206,6 +226,7 @@ async def detect_columns_endpoint(
     from app.engine.column_detector import detect_columns  # noqa: PLC0415
 
     raw_bytes = await file.read()
+    _check_size(raw_bytes, file.filename or "file")
     fname = (file.filename or "upload.csv").lower()
 
     try:
@@ -233,6 +254,14 @@ async def detect_columns_endpoint(
         raise
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # safety net — never 500 on a bad file
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).exception("detect-columns unexpected error")
+        raise HTTPException(
+            status_code=422,
+            detail="We couldn't read this file. Please ensure it's a valid "
+                   "CSV, Excel, or PDF with header rows.",
+        ) from exc
 
     detected = detect_columns(df)
     return {
@@ -258,8 +287,7 @@ async def upload_statement(
     db:           AsyncSession    = Depends(get_db),
 ):
     raw_bytes = await file.read()
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    _check_size(raw_bytes, file.filename or "statement")
 
     encrypted   = encrypt_file(raw_bytes)
     storage_key = f"statements/{current_user.company_id}/{uuid.uuid4()}/{file.filename}"
@@ -283,6 +311,14 @@ async def upload_statement(
             method         = "tabular"
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # safety net — never 500 on a bad file
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).exception("upload/statement unexpected error")
+        raise HTTPException(
+            status_code=422,
+            detail="We couldn't read this file. Please ensure it's a valid "
+                   "PDF, CSV, or Excel statement with header rows.",
+        ) from exc
 
     record = UploadedStatement(
         company_id=current_user.company_id,
@@ -311,8 +347,7 @@ async def upload_ledger(
     import json
 
     raw_bytes = await file.read()
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    _check_size(raw_bytes, file.filename or "ledger")
 
     col_map: dict | None = json.loads(column_mapping) if column_mapping else None
 
@@ -336,6 +371,14 @@ async def upload_ledger(
         raise
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # safety net — never 500 on a bad file
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).exception("upload/ledger unexpected error")
+        raise HTTPException(
+            status_code=422,
+            detail="We couldn't read this ledger. Please ensure it's a valid "
+                   "CSV or Excel export with header rows.",
+        ) from exc
 
     encrypted   = encrypt_file(raw_bytes)
     storage_key = f"ledgers/{current_user.company_id}/{uuid.uuid4()}/{file.filename}"

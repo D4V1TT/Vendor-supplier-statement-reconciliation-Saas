@@ -56,6 +56,10 @@ class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     slug: Mapped[str]  = mapped_column(String(100), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Billing plan — gates premium features like the AI extraction fallback.
+    # "free" | "pro" | "enterprise"
+    plan: Mapped[str] = mapped_column(String(20), default="free")
+
     # ── Reconciliation defaults (applied to every run) ────────────────────────
     default_currency:      Mapped[str]  = mapped_column(String(8), default="USD")
     amount_tolerance:      Mapped[float] = mapped_column(Numeric(10, 4), default=0.01)

@@ -56,6 +56,10 @@ async def sandbox_reconcile(
     Public: reconcile a statement against a ledger in-memory and return the
     real summary + a capped, blurred-on-the-client preview of exceptions.
     """
+    # Anonymous sandbox = free tier → no paid LLM fallback.
+    from app.core.llm_gate import set_llm_allowed  # noqa: PLC0415
+    set_llm_allowed(False)
+
     stmt_bytes   = await statement.read()
     ledger_bytes = await ledger.read()
 

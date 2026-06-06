@@ -666,20 +666,33 @@ def _read_excel_robust(buffer, engine: str) -> pd.DataFrame:
     """
     Read Excel, auto-skipping leading title rows.
     Finds the first row where >= 2 cells are non-empty and treats it as header.
+    Corrupt/unreadable workbooks are converted to a clean ValueError.
     """
-    # First read with no header to locate the real header row
-    preview = pd.read_excel(buffer, engine=engine, header=None, nrows=15)
-    header_row = 0
-    for i in range(len(preview)):
-        non_empty = preview.iloc[i].notna().sum()
-        if non_empty >= 2:
-            header_row = i
-            break
+    try:
+        # First read with no header to locate the real header row
+        preview = pd.read_excel(buffer, engine=engine, header=None, nrows=15)
+        header_row = 0
+        for i in range(len(preview)):
+            non_empty = preview.iloc[i].notna().sum()
+            if non_empty >= 2:
+                header_row = i
+                break
 
-    buffer.seek(0)
-    df = pd.read_excel(buffer, engine=engine, header=header_row)
+        buffer.seek(0)
+        df = pd.read_excel(buffer, engine=engine, header=header_row)
+    except ValueError:
+        raise
+    except Exception as exc:
+        # BadZipFile, InvalidFileException, XLRDError, etc. → clean message
+        raise ValueError(
+            "This file could not be read as a spreadsheet. It may be corrupted, "
+            "password-protected, or not a real Excel file."
+        ) from exc
+
     df = df.dropna(axis=1, how="all")
     df = df.loc[:, ~df.columns.astype(str).str.match(r"^Unnamed")]
+    if df.empty or len(df.columns) < 1:
+        raise ValueError("The spreadsheet contains no usable data rows.")
     return df
 
 

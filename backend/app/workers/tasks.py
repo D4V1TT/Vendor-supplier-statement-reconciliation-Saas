@@ -56,11 +56,13 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
             supplier_df = pd.DataFrame(statement.extracted_data["line_items"])
             ledger_df   = pd.DataFrame(ledger.parsed_data["rows"])
 
-            # Apply the company's reconciliation defaults
+            # Apply the company's reconciliation defaults + LLM plan gate
             from app.db.models.models import Company  # noqa: PLC0415
+            from app.core.llm_gate import plan_allows_llm, set_llm_allowed  # noqa: PLC0415
             company = await db.get(Company, job.company_id)
             tolerance     = float(company.amount_tolerance) if company else 0.01
             flag_credits  = company.flag_unapplied_credits if company else True
+            set_llm_allowed(plan_allows_llm(company.plan if company else "free"))
 
             report = reconcile(
                 supplier_df, ledger_df,

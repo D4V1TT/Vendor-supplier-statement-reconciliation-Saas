@@ -385,6 +385,14 @@ def _extract_with_llm(pdf_bytes: bytes, raw_text: str) -> ExtractionResult:
     # Import here to avoid loading SDK in every worker process
     import anthropic  # noqa: PLC0415
     from app.core.config import get_settings  # noqa: PLC0415
+    from app.core.llm_gate import llm_allowed  # noqa: PLC0415
+
+    if not llm_allowed():
+        raise RuntimeError(
+            "AI extraction is a Pro feature. This file couldn't be read by the "
+            "standard parser — upgrade to Pro for AI-powered extraction, or "
+            "upload a CSV/Excel export instead."
+        )
 
     settings = get_settings()
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)

@@ -214,6 +214,11 @@ def _llm_match(columns: list[str], sample_rows: list[dict]) -> dict[str, tuple[s
         import json  # noqa: PLC0415
         import anthropic  # noqa: PLC0415
         from app.core.config import get_settings  # noqa: PLC0415
+        from app.core.llm_gate import llm_allowed  # noqa: PLC0415
+
+        if not llm_allowed():
+            logger.info("LLM column detection skipped — not available on this plan.")
+            return {}
 
         settings = get_settings()
         if not settings.ANTHROPIC_API_KEY:
