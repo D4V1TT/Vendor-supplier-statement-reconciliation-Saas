@@ -76,6 +76,23 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
 
+    @property
+    def async_database_url(self) -> str:
+        """
+        SQLAlchemy needs the +asyncpg driver in the URL. Railway/Heroku provide
+        a plain `postgresql://` (or legacy `postgres://`) — normalise either to
+        the async form so the app works with auto-provided DATABASE_URLs.
+        """
+        url = self.DATABASE_URL
+        if "+asyncpg" in url:
+            return url
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql+asyncpg://", 1)
+        return url
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

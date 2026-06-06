@@ -24,7 +24,7 @@ from app.engine.reconciler import reconcile
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-_engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+_engine = create_async_engine(settings.async_database_url, pool_pre_ping=True)
 _SessionFactory = async_sessionmaker(_engine, expire_on_commit=False)
 
 
