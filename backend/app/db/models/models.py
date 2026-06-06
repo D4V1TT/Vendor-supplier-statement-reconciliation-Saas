@@ -213,6 +213,7 @@ class ReconciliationJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     count_unapplied_credit: Mapped[int | None]
     count_likely_match: Mapped[int | None]          # fuzzy ID, amounts agree
     count_missing_in_statement: Mapped[int | None]  # in ledger/ERP, not on statement
+    count_duplicate: Mapped[int | None]             # same ID repeated on one side
 
     # Total variance across all mismatched lines (supplier_amount - ledger_amount)
     total_variance: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)

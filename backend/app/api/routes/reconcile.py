@@ -689,6 +689,7 @@ def _build_summary_dict(job: ReconciliationJob) -> dict:
     cred    = job.count_unapplied_credit or 0
     likely  = job.count_likely_match or 0
     miss_s  = job.count_missing_in_statement or 0
+    dup     = job.count_duplicate or 0
     return {
         "total_supplier_lines":       total,
         "count_matched":              matched,
@@ -697,7 +698,8 @@ def _build_summary_dict(job: ReconciliationJob) -> dict:
         "count_unapplied_credit":     cred,
         "count_likely_match":         likely,
         "count_missing_in_statement": miss_s,
+        "count_duplicate":            dup,
         "total_variance":             float(job.total_variance or 0),
-        "exception_count":            mism + miss_l + cred + likely + miss_s,
+        "exception_count":            mism + miss_l + cred + likely + miss_s + dup,
         "match_rate_pct":             round(matched / max(total, 1) * 100, 1),
     }

@@ -38,6 +38,7 @@ FLAGGED_MISSING_IN_LEDGER    = "Flagged_Missing_In_Ledger"
 FLAGGED_UNAPPLIED_CREDIT     = "Flagged_Unapplied_Credit"
 FLAGGED_LIKELY_MATCH         = "Flagged_Likely_Match"        # fuzzy ID, amounts agree
 FLAGGED_MISSING_IN_STATEMENT = "Flagged_Missing_In_Statement"  # in ledger/ERP only
+FLAGGED_DUPLICATE            = "Flagged_Duplicate"          # same ID repeated on one side
 
 # Monetary tolerance for "exact match" — adjust if your clients use rounding
 AMOUNT_TOLERANCE: float = 0.01  # $0.01
@@ -91,6 +92,7 @@ class ReconciliationSummary:
     total_variance:          float   # sum of all exception variances
     count_likely_match:         int = 0  # fuzzy ID, amounts agree
     count_missing_in_statement: int = 0  # in ledger/ERP, not on statement
+    count_duplicate:            int = 0  # same ID repeated on one side
 
     @property
     def exception_count(self) -> int:
@@ -100,6 +102,7 @@ class ReconciliationSummary:
             + self.count_unapplied_credit
             + self.count_likely_match
             + self.count_missing_in_statement
+            + self.count_duplicate
         )
 
     @property
@@ -131,6 +134,7 @@ class ReconciliationReport:
                 "total_variance":          round(self.summary.total_variance, 2),
                 "count_likely_match":         self.summary.count_likely_match,
                 "count_missing_in_statement": self.summary.count_missing_in_statement,
+                "count_duplicate":            self.summary.count_duplicate,
                 "exception_count":         self.summary.exception_count,
                 "match_rate_pct":          self.summary.match_rate_pct,
             },
@@ -247,16 +251,8 @@ def _normalise(df: pd.DataFrame, source: str) -> pd.DataFrame:
         logger.info("%s: %d row(s) had null/unparseable amounts — treated as 0.00.", source, null_amounts)
         df["amount"] = df["amount"].fillna(0.0)
 
-    # Deduplicate on invoice_id — keep the last occurrence (most recently posted)
-    dupes = df.duplicated("invoice_id", keep=False)
-    if dupes.any():
-        logger.warning(
-            "%s: %d duplicate invoice IDs found — keeping last occurrence per ID.",
-            source,
-            dupes.sum(),
-        )
-        df = df.drop_duplicates("invoice_id", keep="last")
-
+    # NOTE: duplicates are intentionally NOT dropped here — they're a real AP
+    # signal (possible double-billing). reconcile() detects and flags them.
     return df
 
 
@@ -303,17 +299,56 @@ def reconcile(
             except ValueError:
                 return None
 
-    # Exact index {invoice_id -> amount} and fuzzy index {fuzzy_key -> (id, amount)}
-    ledger_index: dict[str, float] = dict(zip(ledger_df["invoice_id"], ledger_df["amount"]))
-    ledger_fuzzy: dict[str, tuple[str, float]] = {}
-    for lid, lamt in zip(ledger_df["invoice_id"], ledger_df["amount"]):
-        ledger_fuzzy.setdefault(fuzzy_key(lid), (lid, lamt))
-
     line_items:     list[LineItemResult] = []
     matched_led_ids: set[str] = set()   # ledger ids consumed by a statement row
 
-    # ── Pass 1: walk every supplier statement line ────────────────────────────
-    for _, row in supplier_df.iterrows():
+    # ── Pass 0: detect duplicates (same invoice_id repeated on one side) ──────
+    # On the vendor statement this is the classic double-billing risk; in the
+    # ledger it's a double-entry. Flagged as exceptions and removed from the
+    # 1:1 matching set so they don't distort the other categories.
+    supp_counts   = supplier_df["invoice_id"].value_counts()
+    supp_dup_ids  = set(supp_counts[supp_counts > 1].index)
+    led_counts    = ledger_df["invoice_id"].value_counts()
+    led_dup_ids   = set(led_counts[led_counts > 1].index)
+
+    for dup_id in supp_dup_ids:
+        rows  = supplier_df[supplier_df["invoice_id"] == dup_id]
+        total = sum(_safe_float(a) or 0.0 for a in rows["amount"])
+        line_items.append(LineItemResult(
+            invoice_id=dup_id, invoice_date=None,
+            supplier_amount=round(total, 2), ledger_amount=None,
+            variance=None, category=FLAGGED_DUPLICATE, balance_due=None,
+            notes=f"Invoice {dup_id} appears {len(rows)}× on the vendor statement "
+                  f"(total {total:,.2f}) — possible duplicate billing.",
+        ))
+        matched_led_ids.add(dup_id)   # don't also flag its ledger row as missing
+
+    for dup_id in led_dup_ids:
+        rows  = ledger_df[ledger_df["invoice_id"] == dup_id]
+        total = sum(_safe_float(a) or 0.0 for a in rows["amount"])
+        line_items.append(LineItemResult(
+            invoice_id=dup_id, invoice_date=None,
+            supplier_amount=0.0, ledger_amount=round(total, 2),
+            variance=None, category=FLAGGED_DUPLICATE, balance_due=None,
+            notes=f"Invoice {dup_id} appears {len(rows)}× in the internal ledger "
+                  f"(total {total:,.2f}) — possible duplicate entry.",
+        ))
+
+    # Matching sets exclude every duplicated ID (handled above). A supplier row
+    # whose ID is duplicated in the LEDGER is also excluded so it doesn't show
+    # as a false "missing in ledger" — the duplicate flag already covers it.
+    all_dup_ids    = supp_dup_ids | led_dup_ids
+    supplier_match = supplier_df[~supplier_df["invoice_id"].isin(all_dup_ids)]
+    ledger_match   = ledger_df[~ledger_df["invoice_id"].isin(all_dup_ids)]
+
+    # Exact index {invoice_id -> amount} and fuzzy index {fuzzy_key -> (id, amount)}
+    ledger_index: dict[str, float] = dict(zip(ledger_match["invoice_id"], ledger_match["amount"]))
+    ledger_fuzzy: dict[str, tuple[str, float]] = {}
+    for lid, lamt in zip(ledger_match["invoice_id"], ledger_match["amount"]):
+        ledger_fuzzy.setdefault(fuzzy_key(lid), (lid, lamt))
+
+    # ── Pass 1: walk every (non-duplicate) supplier statement line ────────────
+    for _, row in supplier_match.iterrows():
         inv_id      = row["invoice_id"]
         supp_amount = _safe_float(row["amount"]) or 0.0
         inv_date    = str(row.get("invoice_date", "") or "").strip() or None
@@ -384,10 +419,12 @@ def reconcile(
             notes=fuzzy_note + f"Supplier: {supp_amount:,.2f} | Ledger: {ledger_amount:,.2f} | Variance: {variance:+,.2f}",
         ))
 
-    n_statement_lines = len(line_items)  # match-rate denominator (statement-driven)
+    # Match-rate denominator = statement-originated lines only
+    # (supplier dups + walked rows); ledger duplicates added above are not.
+    n_statement_lines = len(line_items) - len(led_dup_ids)
 
     # ── Pass 2: bidirectional — ledger rows never matched by any statement row ─
-    for lid, lamt in zip(ledger_df["invoice_id"], ledger_df["amount"]):
+    for lid, lamt in zip(ledger_match["invoice_id"], ledger_match["amount"]):
         if lid in matched_led_ids:
             continue
         lamt_f = _safe_float(lamt) or 0.0
@@ -417,15 +454,16 @@ def reconcile(
         total_variance=total_variance,
         count_likely_match=categories.count(FLAGGED_LIKELY_MATCH),
         count_missing_in_statement=categories.count(FLAGGED_MISSING_IN_STATEMENT),
+        count_duplicate=categories.count(FLAGGED_DUPLICATE),
     )
 
     logger.info(
         "Reconciliation complete: %d statement lines | matched=%d likely=%d mismatch=%d "
-        "missing_ledger=%d credits=%d missing_stmt=%d | variance=%.2f",
+        "missing_ledger=%d credits=%d missing_stmt=%d duplicate=%d | variance=%.2f",
         n_statement_lines, summary.count_matched, summary.count_likely_match,
         summary.count_amount_mismatch, summary.count_missing_in_ledger,
         summary.count_unapplied_credit, summary.count_missing_in_statement,
-        summary.total_variance,
+        summary.count_duplicate, summary.total_variance,
     )
 
     return ReconciliationReport(summary=summary, line_items=line_items)

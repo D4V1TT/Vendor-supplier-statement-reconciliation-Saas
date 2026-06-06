@@ -400,6 +400,7 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <>
+                      <ExceptionsTable title="Duplicate Invoices" description="Same invoice ID billed more than once on one side — possible double-billing" items={report.duplicates.items} color="red" icon={Icons.warning} />
                       <ExceptionsTable title="Amount Mismatches" description="Invoices found in both sources but with differing amounts" items={report.amount_mismatches.items} color="red" icon={Icons.warning} />
                       <ExceptionsTable title="Likely Matches — verify" description="Invoice IDs nearly match (OCR / format difference) and amounts agree — confirm they're the same invoice" items={report.likely_matches.items} color="blue" icon={Icons.check} />
                       <ExceptionsTable title="Missing in Ledger" description="Invoices present on vendor statement but absent from internal AP ledger" items={report.missing_in_ledger.items} color="amber" icon={Icons.missing} />

@@ -66,6 +66,7 @@ export interface ReportSummary {
   count_unapplied_credit:     number;
   count_likely_match:         number;
   count_missing_in_statement: number;
+  count_duplicate:            number;
   total_variance:             number;
   exception_count:            number;
   match_rate_pct:             number;
@@ -80,6 +81,7 @@ export interface ExceptionsReport {
   unapplied_credits:    ExceptionsBucket;
   likely_matches:       ExceptionsBucket;
   missing_in_statement: ExceptionsBucket;
+  duplicates:           ExceptionsBucket;
   matched_count:        number;
   export_url:           string;
 }

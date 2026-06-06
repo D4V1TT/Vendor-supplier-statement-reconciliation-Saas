@@ -31,6 +31,7 @@ const catColor: Record<string, string> = {
   "Flagged_Unapplied_Credit":     "bg-violet-50 text-violet-700 ring-violet-200",
   "Flagged_Likely_Match":         "bg-blue-50 text-blue-700 ring-blue-200",
   "Flagged_Missing_In_Statement": "bg-slate-100 text-slate-700 ring-slate-200",
+  "Flagged_Duplicate":            "bg-red-50 text-red-700 ring-red-200",
 };
 
 const catLabel: Record<string, string> = {
@@ -39,6 +40,7 @@ const catLabel: Record<string, string> = {
   "Flagged_Unapplied_Credit":     "Unapplied Credit",
   "Flagged_Likely_Match":         "Likely Match",
   "Flagged_Missing_In_Statement": "Missing in Statement",
+  "Flagged_Duplicate":            "Duplicate Invoice",
 };
 
 function fmt(n: number | null) {

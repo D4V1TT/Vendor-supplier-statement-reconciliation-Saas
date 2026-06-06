@@ -134,6 +134,7 @@ class ExceptionsReportResponse(BaseModel):
     unapplied_credits:   ExceptionsBucket
     likely_matches:      ExceptionsBucket
     missing_in_statement: ExceptionsBucket
+    duplicates:          ExceptionsBucket
 
     # ── Matched lines (included but noted as "clean") ─────────────────────────
     matched_count: int
@@ -155,6 +156,7 @@ def build_exceptions_report(
     """
     from app.engine.reconciler import (  # noqa: PLC0415
         FLAGGED_AMOUNT_MISMATCH,
+        FLAGGED_DUPLICATE,
         FLAGGED_LIKELY_MATCH,
         FLAGGED_MISSING_IN_LEDGER,
         FLAGGED_MISSING_IN_STATEMENT,
@@ -185,6 +187,7 @@ def build_exceptions_report(
         unapplied_credits=_bucket(FLAGGED_UNAPPLIED_CREDIT),
         likely_matches=_bucket(FLAGGED_LIKELY_MATCH),
         missing_in_statement=_bucket(FLAGGED_MISSING_IN_STATEMENT),
+        duplicates=_bucket(FLAGGED_DUPLICATE),
         matched_count=summary["count_matched"],
         export_url=f"/api/jobs/{job_id}/export/xlsx",
     )

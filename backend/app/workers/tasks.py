@@ -80,6 +80,7 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
             job.count_unapplied_credit     = s.count_unapplied_credit
             job.count_likely_match         = s.count_likely_match
             job.count_missing_in_statement = s.count_missing_in_statement
+            job.count_duplicate            = s.count_duplicate
             job.total_variance             = s.total_variance
             job.line_items                 = report_dict["line_items"]
 
