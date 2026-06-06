@@ -194,6 +194,26 @@ export default function SettingsPage() {
     }
   }
 
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteAll() {
+    const ok = window.confirm(
+      "Permanently delete ALL reconciliation jobs, statements, and ledger files " +
+      "for your company? This cannot be undone."
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const res = await api.deleteAllData();
+      const d = res.deleted;
+      alert(`Deleted ${d.jobs} jobs, ${d.statements} statements, ${d.ledgers} ledgers (${d.files} files removed).`);
+    } catch (err: any) {
+      alert(err.message ?? "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (!isLoaded) {
     return (
       <AuthGuard>
@@ -351,8 +371,11 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-slate-700">Delete all reconciliation data</p>
                   <p className="text-xs text-slate-400 mt-0.5">Permanently removes all jobs, statements, and ledger files.</p>
                 </div>
-                <button className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors">
-                  Delete all data
+                <button
+                  onClick={handleDeleteAll}
+                  disabled={deleting}
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-60 disabled:cursor-wait">
+                  {deleting ? "Deleting…" : "Delete all data"}
                 </button>
               </div>
             </div>

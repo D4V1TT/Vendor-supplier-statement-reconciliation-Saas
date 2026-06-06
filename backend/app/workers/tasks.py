@@ -128,6 +128,54 @@ async def _maybe_send_completion_email(db: AsyncSession, job: ReconciliationJob)
     send_email(user.email, subject, html)
 
 
+# ── Weekly Digest (scheduled cron) ────────────────────────────────────────────
+
+async def send_weekly_digests(ctx: dict) -> None:
+    """
+    Runs every Monday. For each user who opted into the weekly digest, emails a
+    summary of their company's reconciliation activity over the last 7 days.
+    """
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.core.email import send_email, weekly_digest_email  # noqa: PLC0415
+    from app.db.models.models import Company, ReconciliationJob, User  # noqa: PLC0415
+
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    sent = 0
+
+    async with _SessionFactory() as db:
+        users = (await db.execute(
+            select(User).where(User.notify_weekly_digest.is_(True), User.is_active.is_(True))
+        )).scalars().all()
+
+        for user in users:
+            jobs = (await db.execute(
+                select(ReconciliationJob).where(
+                    ReconciliationJob.company_id == user.company_id,
+                    ReconciliationJob.created_at >= since,
+                    ReconciliationJob.status == JobStatus.COMPLETED,
+                )
+            )).scalars().all()
+
+            if not jobs:
+                continue  # nothing to report this week
+
+            stats = {
+                "jobs":       len(jobs),
+                "lines":      sum(j.total_supplier_lines or 0 for j in jobs),
+                "exceptions": sum((j.count_amount_mismatch or 0) + (j.count_missing_in_ledger or 0)
+                                  + (j.count_unapplied_credit or 0) for j in jobs),
+                "variance":   float(sum(j.total_variance or 0 for j in jobs)),
+            }
+            company = await db.get(Company, user.company_id)
+            subject, html = weekly_digest_email(company.name if company else "Your company", stats)
+            if send_email(user.email, subject, html):
+                sent += 1
+
+    logger.info("Weekly digest run complete — %d email(s) sent.", sent)
+
+
 # ── Enqueue Helper (called from FastAPI) ──────────────────────────────────────
 
 async def enqueue_reconciliation_job(job_id: str) -> None:
@@ -138,8 +186,14 @@ async def enqueue_reconciliation_job(job_id: str) -> None:
 
 # ── Worker Settings ───────────────────────────────────────────────────────────
 
+from arq import cron  # noqa: E402
+
 class WorkerSettings:
-    functions  = [run_reconciliation]
+    functions   = [run_reconciliation]
+    cron_jobs   = [
+        # Every Monday at 08:00 UTC
+        cron(send_weekly_digests, weekday="mon", hour=8, minute=0),
+    ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
-    max_jobs   = 10
+    max_jobs    = 10
     job_timeout = 300   # 5 minutes max per job

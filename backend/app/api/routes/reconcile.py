@@ -87,6 +87,61 @@ from app.workers.tasks import enqueue_reconciliation_job
 router = APIRouter(tags=["reconciliation"])
 
 
+# ── Danger Zone: delete all reconciliation data ───────────────────────────────
+
+@router.delete("/company/data")
+async def delete_all_data(
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """
+    Permanently delete all reconciliation jobs, statements, and ledger exports
+    for the current company — including the encrypted files in storage.
+    Scoped strictly to the caller's company_id (RLS also enforces this).
+    """
+    from app.core.storage import delete_file  # noqa: PLC0415
+
+    cid = current_user.company_id
+    deleted = {"jobs": 0, "statements": 0, "ledgers": 0, "files": 0}
+
+    # 1. Jobs (no files of their own)
+    jobs = (await db.execute(
+        select(ReconciliationJob).where(ReconciliationJob.company_id == cid)
+    )).scalars().all()
+    for j in jobs:
+        await db.delete(j)
+    deleted["jobs"] = len(jobs)
+
+    # 2. Statements (+ their encrypted files)
+    stmts = (await db.execute(
+        select(UploadedStatement).where(UploadedStatement.company_id == cid)
+    )).scalars().all()
+    for s in stmts:
+        try:
+            await delete_file(s.storage_key)
+            deleted["files"] += 1
+        except Exception:
+            pass  # file already gone — keep deleting DB rows
+        await db.delete(s)
+    deleted["statements"] = len(stmts)
+
+    # 3. Ledger exports (+ their encrypted files)
+    ledgers = (await db.execute(
+        select(LedgerExport).where(LedgerExport.company_id == cid)
+    )).scalars().all()
+    for lg in ledgers:
+        try:
+            await delete_file(lg.storage_key)
+            deleted["files"] += 1
+        except Exception:
+            pass
+        await db.delete(lg)
+    deleted["ledgers"] = len(ledgers)
+
+    await db.commit()
+    return {"status": "ok", "deleted": deleted}
+
+
 # ── Company Settings ──────────────────────────────────────────────────────────
 
 @router.get("/company")

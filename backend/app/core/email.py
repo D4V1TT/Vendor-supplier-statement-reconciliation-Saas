@@ -72,3 +72,24 @@ def reconciliation_complete_email(vendor_name: str, summary: dict, job_id: str) 
     </div>
     """
     return subject, html
+
+
+def weekly_digest_email(company_name: str, stats: dict) -> tuple[str, str]:
+    """Returns (subject, html) for the weekly digest of the last 7 days."""
+    subject = f"📊 Your weekly reconciliation digest — {company_name}"
+    html = f"""
+    <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
+      <h2 style="color:#4f46e5;margin-bottom:4px">Weekly digest</h2>
+      <p style="color:#64748b;margin-top:0">{company_name} · last 7 days</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:8px 0">Reconciliations run</td><td style="text-align:right"><b>{stats.get('jobs',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Lines processed</td><td style="text-align:right"><b>{stats.get('lines',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Total exceptions</td><td style="text-align:right;color:#ef4444"><b>{stats.get('exceptions',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Net variance</td><td style="text-align:right"><b>${stats.get('variance',0):,.2f}</b></td></tr>
+      </table>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">
+        VendorRecon · You're receiving this because weekly digest is on in Settings.
+      </p>
+    </div>
+    """
+    return subject, html

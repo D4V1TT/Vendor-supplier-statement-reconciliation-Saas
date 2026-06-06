@@ -172,6 +172,11 @@ export const api = {
   getCompany: () =>
     request<{ id: string; name: string; slug: string }>("/company"),
 
+  deleteAllData: () =>
+    request<{ status: string; deleted: Record<string, number> }>("/company/data", {
+      method: "DELETE",
+    }),
+
   updateCompany: (name: string) =>
     request<{ id: string; name: string; slug: string }>("/company", {
       method: "PUT",
