@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
 
+    # ── Stripe (subscriptions) ────────────────────────────────────────────────
+    STRIPE_SECRET_KEY: str = ""        # sk_test_… / sk_live_…
+    STRIPE_WEBHOOK_SECRET: str = ""    # whsec_… (from the webhook endpoint)
+    STRIPE_PRICE_PRO: str = ""         # price_… for the Pro plan
+
+    # ── Plan limits ───────────────────────────────────────────────────────────
+    # Free tier: max reconciliations per calendar month. Paid plans = unlimited.
+    FREE_MONTHLY_RECON_LIMIT: int = 5
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 

@@ -5,12 +5,43 @@ Core reconciliation routes — Section 5.
 import io
 import math
 import uuid
+from datetime import datetime, timezone
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+from app.core.llm_gate import PAID_PLANS
+
+_settings = get_settings()
+
+
+async def _recon_usage(db: AsyncSession, company: "Company") -> dict:
+    """
+    Current-calendar-month reconciliation usage for a company.
+    Paid plans are unlimited; free plans are capped at FREE_MONTHLY_RECON_LIMIT.
+    Failed jobs do not count against the quota.
+    """
+    paid = (company.plan or "free") in PAID_PLANS
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    used = await db.scalar(
+        select(func.count()).select_from(ReconciliationJob).where(
+            ReconciliationJob.company_id == company.id,
+            ReconciliationJob.created_at >= month_start,
+            ReconciliationJob.status != JobStatus.FAILED,
+        )
+    ) or 0
+    limit = None if paid else _settings.FREE_MONTHLY_RECON_LIMIT
+    return {
+        "plan":      company.plan,
+        "unlimited": paid,
+        "used":      int(used),
+        "limit":     limit,
+        "remaining": None if paid else max(0, limit - int(used)),
+    }
 
 
 # Hard cap on uploaded file size (authenticated). Large files are rejected with
@@ -480,6 +511,18 @@ async def list_jobs(
     return out
 
 
+@router.get("/usage")
+async def get_usage(
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Current month's reconciliation usage vs. the plan limit."""
+    company = await db.get(Company, current_user.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return await _recon_usage(db, company)
+
+
 # ── Reconciliation ─────────────────────────────────────────────────────────────
 
 @router.post("/reconcile", response_model=ReconciliationJobResponse, status_code=202)
@@ -495,6 +538,18 @@ async def submit_reconciliation(
     ledger = await db.get(LedgerExport, payload.ledger_id)
     if not ledger or ledger.company_id != current_user.company_id:
         raise HTTPException(status_code=404, detail="Ledger export not found.")
+
+    # ── Enforce the free-tier monthly quota ───────────────────────────────────
+    company = await db.get(Company, current_user.company_id)
+    usage = await _recon_usage(db, company)
+    if not usage["unlimited"] and usage["remaining"] <= 0:
+        raise HTTPException(
+            status_code=402,  # Payment Required
+            detail=(
+                f"You've used all {usage['limit']} free reconciliations this month. "
+                "Upgrade to Pro for unlimited reconciliations."
+            ),
+        )
 
     job = ReconciliationJob(
         company_id=current_user.company_id,

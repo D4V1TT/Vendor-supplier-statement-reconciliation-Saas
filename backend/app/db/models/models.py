@@ -59,6 +59,8 @@ class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Billing plan — gates premium features like the AI extraction fallback.
     # "free" | "pro" | "enterprise"
     plan: Mapped[str] = mapped_column(String(20), default="free")
+    stripe_customer_id:     Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # ── Reconciliation defaults (applied to every run) ────────────────────────
     default_currency:      Mapped[str]  = mapped_column(String(8), default="USD")

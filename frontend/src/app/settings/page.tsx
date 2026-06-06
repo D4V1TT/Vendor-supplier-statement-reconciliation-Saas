@@ -115,6 +115,10 @@ export default function SettingsPage() {
   const [autoExport,      setAutoExport]      = useState(false);
   const [flagCredits,     setFlagCredits]     = useState(true);
 
+  // Billing
+  const [plan, setPlan]         = useState("free");
+  const [billingBusy, setBillingBusy] = useState(false);
+
   // Seed profile from Clerk on load
   useEffect(() => {
     if (!isLoaded || !user) return;
@@ -138,9 +142,32 @@ export default function SettingsPage() {
         setPdfMethod(METHOD_TO_LABEL[st.pdf_extraction_method] ?? "Auto (recommended)");
         setFlagCredits(st.flag_unapplied_credits);
         setAutoExport(st.auto_export);
+        setPlan((st as any).plan ?? "free");
       })
       .catch(() => { /* keep defaults */ });
   }, []);
+
+  async function handleUpgrade() {
+    setBillingBusy(true);
+    try {
+      const { url } = await api.startCheckout();
+      window.location.href = url;        // redirect to Stripe Checkout
+    } catch (e: any) {
+      alert(e.message ?? "Could not start checkout.");
+      setBillingBusy(false);
+    }
+  }
+
+  async function handleManageBilling() {
+    setBillingBusy(true);
+    try {
+      const { url } = await api.openBillingPortal();
+      window.location.href = url;        // redirect to Stripe portal
+    } catch (e: any) {
+      alert(e.message ?? "Could not open billing portal.");
+      setBillingBusy(false);
+    }
+  }
 
   // Load saved notification preferences
   useEffect(() => {
@@ -315,6 +342,44 @@ export default function SettingsPage() {
                   options={CURRENCY_OPTIONS}
                 />
               </Field>
+            </Section>
+
+            {/* Billing */}
+            <Section title="Billing & Plan" desc="Your subscription. Pro unlocks AI extraction for the toughest files.">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-700">Current plan</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                      plan === "free"
+                        ? "bg-slate-100 text-slate-600"
+                        : "bg-indigo-100 text-indigo-700"
+                    }`}>
+                      {plan === "free" ? "Free" : plan.charAt(0).toUpperCase() + plan.slice(1)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {plan === "free"
+                      ? "Standard parsing (CSV, Excel, clean PDFs, OCR). Upgrade for AI extraction on tough files."
+                      : "AI extraction enabled. Manage or cancel anytime."}
+                  </p>
+                </div>
+                {plan === "free" ? (
+                  <button
+                    onClick={handleUpgrade}
+                    disabled={billingBusy}
+                    className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-wait">
+                    {billingBusy ? "Redirecting…" : "Upgrade to Pro"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleManageBilling}
+                    disabled={billingBusy}
+                    className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60">
+                    {billingBusy ? "Opening…" : "Manage billing"}
+                  </button>
+                )}
+              </div>
             </Section>
 
             {/* Reconciliation */}

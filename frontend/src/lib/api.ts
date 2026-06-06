@@ -95,6 +95,14 @@ export interface NotificationPrefs {
   notify_weekly_digest: boolean;
 }
 
+export interface ReconUsage {
+  plan:      string;
+  unlimited: boolean;
+  used:      number;
+  limit:     number | null;
+  remaining: number | null;
+}
+
 export interface ReconSettings {
   default_currency:       string;
   amount_tolerance:       number;
@@ -175,6 +183,16 @@ export const api = {
 
   getCompany: () =>
     request<{ id: string; name: string; slug: string }>("/company"),
+
+  getUsage: () =>
+    request<ReconUsage>("/usage"),
+
+  // Stripe billing — returns a hosted URL to redirect the user to
+  startCheckout: () =>
+    request<{ url: string }>("/billing/checkout", { method: "POST" }),
+
+  openBillingPortal: () =>
+    request<{ url: string }>("/billing/portal", { method: "POST" }),
 
   deleteAllData: () =>
     request<{ status: string; deleted: Record<string, number> }>("/company/data", {

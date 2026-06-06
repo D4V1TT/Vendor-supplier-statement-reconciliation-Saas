@@ -57,6 +57,11 @@ export default function DashboardPage() {
   const [ledgerFile,    setLedgerFile]    = useState<File | null>(null);
   const [vendorName,    setVendorName]    = useState("");
 
+  // Plan usage (free-tier quota)
+  const [usage, setUsage] = useState<import("@/lib/api").ReconUsage | null>(null);
+  const refreshUsage = () => api.getUsage().then(setUsage).catch(() => {});
+  useEffect(() => { refreshUsage(); }, []);
+
   // Column mapping state
   const [stmtDetection,    setStmtDetection]    = useState<DetectionResult | null>(null);
   const [ledgerDetection,  setLedgerDetection]  = useState<DetectionResult | null>(null);
@@ -160,6 +165,7 @@ export default function DashboardPage() {
           const rpt = await api.getReport(job.id);
           setReport(rpt);
           setStage("done");
+          refreshUsage();   // update the free-tier counter
           // Auto-export to Excel if the company setting is enabled
           try {
             const settings = await api.getSettings();
@@ -171,8 +177,15 @@ export default function DashboardPage() {
         }
       }
     } catch (err: any) {
-      setError(err.message ?? "Something went wrong.");
+      // 402 = monthly free quota reached → clear upgrade prompt
+      const msg = err.message ?? "Something went wrong.";
+      setError(
+        /free reconciliation/i.test(msg)
+          ? msg + " Open Settings → Billing to upgrade."
+          : msg
+      );
       setStage("error");
+      refreshUsage();
     }
   }, [canSubmit, statementFile, ledgerFile, vendorName, stmtMapping, ledgerMapping]);
 
@@ -223,6 +236,26 @@ export default function DashboardPage() {
                 setMappingTarget(null);
               }}
             />
+          )}
+
+          {/* Free-tier usage banner */}
+          {!mappingTarget && (stage === "idle" || stage === "detecting" || stage === "error") &&
+           usage && !usage.unlimited && (
+            <div className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-sm ${
+              (usage.remaining ?? 0) <= 0
+                ? "border-red-200 bg-red-50 text-red-700"
+                : (usage.remaining ?? 0) <= 1
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-slate-200 bg-white text-slate-500"
+            }`}>
+              <span>
+                <b className="font-semibold">{usage.used}/{usage.limit}</b> free reconciliations used this month
+                {(usage.remaining ?? 0) <= 0 && " — limit reached"}
+              </span>
+              <a href="/settings" className="font-semibold text-indigo-600 hover:text-indigo-800 transition-colors whitespace-nowrap">
+                Upgrade to Pro →
+              </a>
+            </div>
           )}
 
           {/* Upload form */}
