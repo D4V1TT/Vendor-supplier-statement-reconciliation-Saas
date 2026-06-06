@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, reconcile
+from app.api.routes import auth, reconcile, sandbox
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(auth.router,       prefix=settings.API_PREFIX)
 app.include_router(reconcile.router,  prefix=settings.API_PREFIX)
+app.include_router(sandbox.router,    prefix=settings.API_PREFIX)
 
 
 @app.get("/health")

@@ -5,10 +5,11 @@
  */
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, SignUpButton, SignInButton } from "@clerk/nextjs";
 import { DropZone } from "@/components/DropZone";
+import { api, type LineItem, type ReportSummary } from "@/lib/api";
 
 // ── tiny inline icons ─────────────────────────────────────────────────────────
 const Check = () => (
@@ -24,19 +25,16 @@ const FEATURES = [
   "Supports PDF, Excel, CSV — any vendor format",
 ];
 
-// Fake demo data shown blurred to tease the report
-const DEMO_ROWS = [
-  { id: "INV-4821", supplier: 12_450.00, ledger: 11_200.00, diff: 1_250.00, cat: "Amount Mismatch" },
-  { id: "INV-4830", supplier:  3_200.00, ledger: null,       diff: null,    cat: "Missing in Ledger" },
-  { id: "CN-0041",  supplier: -1_800.00, ledger: null,       diff: null,    cat: "Unapplied Credit" },
-  { id: "INV-4818", supplier:  8_750.00, ledger: null,       diff: null,    cat: "Missing in Ledger" },
-  { id: "INV-4799", supplier:  5_430.00, ledger: 5_230.00,  diff: 200.00,  cat: "Amount Mismatch" },
-];
-
 const catColor: Record<string, string> = {
-  "Amount Mismatch":    "bg-red-50 text-red-700 ring-red-200",
-  "Missing in Ledger":  "bg-amber-50 text-amber-700 ring-amber-200",
-  "Unapplied Credit":   "bg-violet-50 text-violet-700 ring-violet-200",
+  "Flagged_Amount_Mismatch":   "bg-red-50 text-red-700 ring-red-200",
+  "Flagged_Missing_In_Ledger": "bg-amber-50 text-amber-700 ring-amber-200",
+  "Flagged_Unapplied_Credit":  "bg-violet-50 text-violet-700 ring-violet-200",
+};
+
+const catLabel: Record<string, string> = {
+  "Flagged_Amount_Mismatch":   "Amount Mismatch",
+  "Flagged_Missing_In_Ledger": "Missing in Ledger",
+  "Flagged_Unapplied_Credit":  "Unapplied Credit",
 };
 
 function fmt(n: number | null) {
@@ -51,6 +49,10 @@ export default function LandingPage() {
   const [stmtFile, setStmtFile]   = useState<File | null>(null);
   const [ledgerFile, setLedger]   = useState<File | null>(null);
   const [showDemo, setShowDemo]   = useState(false);
+  const [running, setRunning]     = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+  const [summary, setSummary]     = useState<ReportSummary | null>(null);
+  const [rows, setRows]           = useState<LineItem[]>([]);
 
   // Redirect signed-in users straight to the app
   if (isSignedIn) {
@@ -58,12 +60,22 @@ export default function LandingPage() {
     return null;
   }
 
-  function handleTryDemo(e: React.FormEvent) {
+  async function handleTryDemo(e: React.FormEvent) {
     e.preventDefault();
     if (!stmtFile || !ledgerFile) return;
-    setShowDemo(true);
-    // Scroll to results
-    setTimeout(() => document.getElementById("demo-result")?.scrollIntoView({ behavior: "smooth" }), 100);
+    setRunning(true);
+    setDemoError(null);
+    try {
+      const result = await api.sandboxReconcile(stmtFile, ledgerFile);
+      setSummary(result.summary);
+      setRows(result.exceptions);
+      setShowDemo(true);
+      setTimeout(() => document.getElementById("demo-result")?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch (err: any) {
+      setDemoError(err.message ?? "Could not process files.");
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -192,27 +204,38 @@ export default function LandingPage() {
                   />
                 </div>
               </div>
+              {demoError && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <p className="text-sm text-red-700">{demoError}</p>
+                </div>
+              )}
               <button
                 type="submit"
-                disabled={!stmtFile || !ledgerFile}
+                disabled={!stmtFile || !ledgerFile || running}
                 className={`w-full rounded-xl py-3 text-sm font-bold tracking-wide transition-all
-                  ${stmtFile && ledgerFile
+                  ${stmtFile && ledgerFile && !running
                     ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
                     : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
               >
-                Run Free Demo →
+                {running
+                  ? <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
+                      Analysing your files…
+                    </span>
+                  : "Run Free Demo →"}
               </button>
             </form>
           ) : (
 
             /* ── Demo Result (blurred preview + CTA) ────────────────────── */
             <div id="demo-result" className="animate-fade-up">
-              {/* Summary bar */}
+              {/* Summary bar — REAL counts from the uploaded files */}
               <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
                 {[
-                  { label: "Amount Mismatches", value: "2", color: "text-red-600" },
-                  { label: "Missing Invoices",  value: "2", color: "text-amber-600" },
-                  { label: "Unapplied Credits", value: "1", color: "text-violet-600" },
+                  { label: "Amount Mismatches", value: summary?.count_amount_mismatch ?? 0,   color: "text-red-600" },
+                  { label: "Missing Invoices",  value: summary?.count_missing_in_ledger ?? 0, color: "text-amber-600" },
+                  { label: "Unapplied Credits", value: summary?.count_unapplied_credit ?? 0,  color: "text-violet-600" },
                 ].map(k => (
                   <div key={k.label} className="px-6 py-5 text-center">
                     <p className={`text-3xl font-extrabold ${k.color}`}>{k.value}</p>
@@ -221,8 +244,8 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              {/* Blurred table */}
-              <div className="relative overflow-hidden">
+              {/* Blurred table — REAL exception rows */}
+              <div className="relative overflow-hidden min-h-[240px]">
                 <table className="w-full text-sm select-none">
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr>
@@ -232,14 +255,16 @@ export default function LandingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 blur-[3px] pointer-events-none">
-                    {DEMO_ROWS.map((r, i) => (
+                    {(rows.length ? rows : Array(5).fill(null)).slice(0, 6).map((r, i) => (
                       <tr key={i} className="hover:bg-slate-50/60">
-                        <td className="px-5 py-3.5 font-mono font-bold text-slate-800 text-xs">{r.id}</td>
-                        <td className="px-5 py-3.5 tabular-nums font-medium">{fmt(r.supplier)}</td>
-                        <td className="px-5 py-3.5 tabular-nums text-slate-400">{fmt(r.ledger)}</td>
-                        <td className="px-5 py-3.5 tabular-nums font-bold text-red-600">{r.diff != null ? `+${fmt(r.diff)}` : "—"}</td>
+                        <td className="px-5 py-3.5 font-mono font-bold text-slate-800 text-xs">{r?.invoice_id ?? "INV-0000"}</td>
+                        <td className="px-5 py-3.5 tabular-nums font-medium">{fmt(r?.supplier_amount ?? 0)}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-slate-400">{fmt(r?.ledger_amount ?? null)}</td>
+                        <td className="px-5 py-3.5 tabular-nums font-bold text-red-600">{r?.variance != null ? `${r.variance > 0 ? "+" : ""}${fmt(r.variance)}` : "—"}</td>
                         <td className="px-5 py-3.5">
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${catColor[r.cat]}`}>{r.cat}</span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${catColor[r?.category] ?? "bg-slate-50 text-slate-500 ring-slate-200"}`}>
+                            {catLabel[r?.category] ?? "Exception"}
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -256,7 +281,7 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <p className="font-bold text-slate-900 text-base">
-                        <span className="text-indigo-600">5 exceptions found</span> in your files
+                        <span className="text-indigo-600">{summary?.exception_count ?? 0} exception{summary?.exception_count !== 1 ? "s" : ""} found</span> in your files
                       </p>
                       <p className="text-sm text-slate-500 mt-1">
                         Create a free account to unlock the full report and download the Excel file.

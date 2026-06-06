@@ -146,6 +146,22 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  // Public sandbox — no auth, no storage. Runs reconciliation in-memory.
+  sandboxReconcile: async (statement: File, ledger: File) => {
+    const form = new FormData();
+    form.append("statement", statement);
+    form.append("ledger", ledger);
+    const res = await fetch(`${BASE}/sandbox/reconcile`, { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail ?? `Sandbox failed (${res.status})`);
+    return data as {
+      summary: ReportSummary;
+      exceptions: LineItem[];
+      truncated: boolean;
+      total_exceptions: number;
+    };
+  },
+
   getExportUrl: (jobId: string) =>
     `${BASE}/jobs/${jobId}/export/xlsx`,
 
