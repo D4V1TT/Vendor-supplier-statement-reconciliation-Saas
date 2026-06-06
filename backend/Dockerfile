@@ -15,4 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN chmod +x start.sh
+
 EXPOSE 8000
+
+# Default command = run migrations + start the API server.
+# The worker service overrides this with: arq app.workers.tasks.WorkerSettings
+CMD ["sh", "start.sh"]
