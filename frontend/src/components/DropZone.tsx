@@ -116,7 +116,11 @@ export function DropZone({ label, hint, accept, icon, accentColor, onFile, file 
             <p className="text-xs text-slate-400 mt-0.5">{dragging ? "Drop to upload" : hint}</p>
           </div>
           <span className="text-[10px] font-medium text-slate-300 border border-slate-100 rounded-full px-3 py-0.5">
-            PDF · XLSX · CSV · TXT · ODS
+            {accept
+              .split(",")
+              .map(e => e.trim().replace(".", "").toUpperCase())
+              .filter((e, i, arr) => e && arr.indexOf(e) === i)
+              .join(" · ")}
           </span>
         </div>
       )}

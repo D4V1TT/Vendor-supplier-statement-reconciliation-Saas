@@ -16,16 +16,17 @@ export function ApiAuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Wrap getToken so it retries once if the first call returns null
+    // Always mint a FRESH token (skipCache) so a long-idle tab never sends a
+    // stale/expired session token. Falls back to a cached token if the forced
+    // refresh fails for any reason.
     const safeGetToken = async () => {
       try {
-        const token = await getToken();
-        if (token) return token;
-        // Retry once after a short wait (Clerk session can take a tick to hydrate)
+        const fresh = await getToken({ skipCache: true });
+        if (fresh) return fresh;
         await new Promise(r => setTimeout(r, 300));
         return await getToken();
       } catch {
-        return null;
+        try { return await getToken(); } catch { return null; }
       }
     };
 

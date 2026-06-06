@@ -32,6 +32,21 @@ const CANON_LABEL: Record<string, string> = {
 const REQUIRED = new Set(["invoice_id", "amount"]);
 
 export function MappingChips({ detection, confirmed, onEdit }: MappingChipsProps) {
+  // Scanned PDF: no fast preview — extraction (OCR/AI) runs on submit.
+  if ((detection as any).extraction_deferred) {
+    return (
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2.5 flex items-start gap-2">
+        <svg className="w-4 h-4 text-indigo-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-[11px] text-indigo-700 leading-relaxed">
+          {(detection as any).message ??
+            "This PDF needs full extraction (OCR/AI). It will run automatically when you click Run Reconciliation."}
+        </p>
+      </div>
+    );
+  }
+
   const activeMapping = confirmed ?? detection.mapping;   // raw → canonical
   const lowConfidence = detection.needs_user_confirmation && !confirmed;
 

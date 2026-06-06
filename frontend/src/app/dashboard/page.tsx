@@ -70,9 +70,16 @@ export default function DashboardPage() {
 
   // ── Detect columns when a file is dropped ──────────────────────────────────
   async function detectFile(file: File, target: "statement" | "ledger") {
+    setError(null);
+
+    // AP ledgers are accounting-system exports — never PDF. Block it early.
+    if (target === "ledger" && file.name.toLowerCase().endsWith(".pdf")) {
+      setError("The AP ledger must be a CSV or Excel export, not a PDF. PDFs are only for vendor statements.");
+      return;
+    }
+
     if (target === "statement") { setStatementFile(file); setStmtDetection(null); setStmtMapping(null); }
     else                        { setLedgerFile(file);   setLedgerDetection(null); setLedgerMapping(null); }
-    setError(null);
 
     // Run detection on ALL file types (PDFs are extracted server-side first).
     setStage("detecting");
@@ -100,7 +107,16 @@ export default function DashboardPage() {
         return;
       }
 
-      const detection: DetectionResult = await res.json();
+      const detection: DetectionResult & { extraction_deferred?: boolean } = await res.json();
+
+      // Scanned PDF: no fast preview available — extraction runs on submit.
+      if (detection.extraction_deferred) {
+        if (target === "statement") setStmtDetection(detection);
+        else                        setLedgerDetection(detection);
+        setStage("idle");
+        return;
+      }
+
       if (target === "statement") {
         setStmtDetection(detection);
         if (detection.needs_user_confirmation) setMappingTarget("statement");
@@ -264,8 +280,11 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Cross-file column alignment — shown once BOTH files are detected */}
-              {stmtDetection && ledgerDetection && (
+              {/* Cross-file column alignment — shown once BOTH files are detected
+                  with usable mappings (skip when a PDF's extraction is deferred). */}
+              {stmtDetection && ledgerDetection &&
+               !(stmtDetection as any).extraction_deferred &&
+               !(ledgerDetection as any).extraction_deferred && (
                 <ColumnAlignment
                   statement={stmtDetection}
                   ledger={ledgerDetection}

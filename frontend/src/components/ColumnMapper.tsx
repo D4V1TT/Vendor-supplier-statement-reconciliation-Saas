@@ -17,6 +17,8 @@ export interface DetectionResult {
   missing_required:        string[];
   method:                  string;
   sample_rows:             Record<string, unknown>[];
+  extraction_deferred?:    boolean;   // scanned PDF — full extraction runs on submit
+  message?:                string;
 }
 
 interface ColumnMapperProps {

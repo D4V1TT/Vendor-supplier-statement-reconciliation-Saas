@@ -194,19 +194,23 @@ async def detect_columns_endpoint(
 
     try:
         if fname.endswith(".pdf"):
-            # Run the same PDF extraction the upload would use, honoring the
-            # company's chosen method, so the preview reflects reality.
-            company = await db.get(Company, current_user.company_id)
-            pdf_method = (company.pdf_extraction_method if company else "auto") or "auto"
-            result = extract_statement(raw_bytes, method=pdf_method)
-            if not result.line_items:
-                raise HTTPException(
-                    status_code=422,
-                    detail="No invoice data could be extracted from this PDF. "
-                           "It may be a scanned image, password-protected, or not a statement. "
-                           "Try a different extraction method in Settings, or upload CSV/Excel.",
-                )
-            df = result.to_dataframe()
+            # FAST preview only: try the text-layer extractor (pdfplumber, <1s).
+            # Slow OCR/LLM are NOT run here — they'd hang the UI. If the text
+            # layer yields nothing (scanned PDF), defer to the full waterfall
+            # that runs when the user clicks "Run Reconciliation".
+            from app.engine.pdf_extractor import _extract_with_pdfplumber  # noqa: PLC0415
+            quick = _extract_with_pdfplumber(raw_bytes)
+            if not quick or not quick.line_items:
+                return {
+                    "extraction_deferred": True,
+                    "message": "This PDF has no text layer — full extraction "
+                               "(OCR/AI) will run when you click Run Reconciliation.",
+                    "raw_columns": [],
+                    "mapping": {}, "confidence": {}, "overall_confidence": 0.0,
+                    "needs_user_confirmation": False, "missing_required": [],
+                    "method": "deferred", "sample_rows": [],
+                }
+            df = quick.to_dataframe()
         else:
             df = parse_ledger_file(raw_bytes, file.filename or "upload.csv")
     except HTTPException:
@@ -216,6 +220,7 @@ async def detect_columns_endpoint(
 
     detected = detect_columns(df)
     return {
+        "extraction_deferred":  False,
         "raw_columns":          detected.raw_columns,
         "mapping":              detected.mapping,        # {raw → canonical}
         "confidence":           detected.confidence,     # {canonical → 0–1}
