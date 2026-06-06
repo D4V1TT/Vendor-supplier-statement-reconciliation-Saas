@@ -13,6 +13,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+def _clean_dicts(rows: list[dict]) -> list[dict]:
+    """Replace NaN/inf/NaT in a list of dicts with None for valid JSON."""
+    out = []
+    for row in rows:
+        clean = {}
+        for k, v in row.items():
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                clean[k] = None
+            elif pd.isna(v):
+                clean[k] = None
+            else:
+                clean[k] = v
+        out.append(clean)
+    return out
+
+
 def _json_safe_records(df: pd.DataFrame) -> list[dict]:
     """
     Convert a DataFrame to JSON/JSONB-safe records.
@@ -228,7 +244,9 @@ async def detect_columns_endpoint(
         "needs_user_confirmation": detected.needs_user_confirmation,
         "missing_required":     list(detected.missing_required),
         "method":               detected.method,
-        "sample_rows":          detected.sample_rows[:3],
+        # Sanitize NaN/inf → None so the JSON response is valid (exported files
+        # often have empty cells that pandas reads as NaN).
+        "sample_rows":          _clean_dicts(detected.sample_rows[:3]),
     }
 
 
@@ -298,9 +316,25 @@ async def upload_ledger(
 
     col_map: dict | None = json.loads(column_mapping) if column_mapping else None
 
+    fname_lower = (file.filename or "ledger.csv").lower()
     try:
-        df = parse_ledger_file(raw_bytes, file.filename or "ledger.csv", col_map)
-    except ValueError as exc:
+        if fname_lower.endswith(".pdf"):
+            # PDF ledger (e.g. AP aging printed to PDF) → use the extraction engine
+            company    = await db.get(Company, current_user.company_id)
+            pdf_method = (company.pdf_extraction_method if company else "auto") or "auto"
+            result     = extract_statement(raw_bytes, method=pdf_method)
+            if not result.line_items:
+                raise HTTPException(
+                    status_code=422,
+                    detail="No data could be extracted from this PDF ledger. "
+                           "Try a different extraction method, or upload CSV/Excel.",
+                )
+            df = result.to_dataframe()
+        else:
+            df = parse_ledger_file(raw_bytes, file.filename or "ledger.csv", col_map)
+    except HTTPException:
+        raise
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     encrypted   = encrypt_file(raw_bytes)

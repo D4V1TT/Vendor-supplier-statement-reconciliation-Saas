@@ -72,12 +72,6 @@ export default function DashboardPage() {
   async function detectFile(file: File, target: "statement" | "ledger") {
     setError(null);
 
-    // AP ledgers are accounting-system exports — never PDF. Block it early.
-    if (target === "ledger" && file.name.toLowerCase().endsWith(".pdf")) {
-      setError("The AP ledger must be a CSV or Excel export, not a PDF. PDFs are only for vendor statements.");
-      return;
-    }
-
     if (target === "statement") { setStatementFile(file); setStmtDetection(null); setStmtMapping(null); }
     else                        { setLedgerFile(file);   setLedgerDetection(null); setLedgerMapping(null); }
 
@@ -266,7 +260,7 @@ export default function DashboardPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 px-1">Internal AP Ledger</p>
                   <DropZone label="Drop AP ledger export here" hint="Drag & drop or click to browse"
-                    accept=".csv,.xlsx,.xls,.txt,.tsv,.ods"
+                    accept=".pdf,.csv,.xlsx,.xls,.txt,.tsv,.ods"
                     icon={Icons.table} accentColor="violet"
                     file={ledgerFile}
                     onFile={f => detectFile(f, "ledger")} />
