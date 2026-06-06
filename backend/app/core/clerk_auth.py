@@ -75,7 +75,10 @@ def verify_clerk_token(token: str) -> dict:
                 token,
                 signing_key.to_dict(),
                 algorithms=["RS256"],
-                options={"verify_aud": False},
+                # Clerk session tokens are short-lived (~60s). Allow 60s leeway
+                # so a token that expires mid-request (slow upload/processing)
+                # or minor clock drift doesn't get rejected.
+                options={"verify_aud": False, "leeway": 60},
             )
             return payload
         except Exception as exc:
