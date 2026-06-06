@@ -1,14 +1,15 @@
 """
 Pluggable file storage backend.
 STORAGE_BACKEND=local  → files on local disk (dev/single-server)
-STORAGE_BACKEND=s3     → AWS S3 (production)
+STORAGE_BACKEND=s3     → any S3-compatible object store (AWS S3, Cloudflare R2)
 
+For Cloudflare R2, set S3_ENDPOINT_URL to your R2 endpoint and AWS_REGION=auto.
 All stored bytes are already AES-256 encrypted by the caller.
 """
 
 from __future__ import annotations
 
-import os
+from functools import lru_cache
 from pathlib import Path
 
 import boto3
@@ -45,10 +46,17 @@ async def delete_file(key: str) -> None:
             path.unlink()
 
 
+@lru_cache(maxsize=1)
 def _s3_client():
-    return boto3.client(
-        "s3",
+    """
+    Cached S3-compatible client. Works with AWS S3 and Cloudflare R2.
+    R2: set S3_ENDPOINT_URL=https://<accountid>.r2.cloudflarestorage.com
+    """
+    kwargs = dict(
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.AWS_REGION,
+        region_name=settings.AWS_REGION or "auto",
     )
+    if settings.S3_ENDPOINT_URL:
+        kwargs["endpoint_url"] = settings.S3_ENDPOINT_URL
+    return boto3.client("s3", **kwargs)

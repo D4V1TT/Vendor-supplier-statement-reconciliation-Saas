@@ -26,12 +26,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8-hour sessions
 
     # ── File Storage ──────────────────────────────────────────────────────────
-    STORAGE_BACKEND: str = "local"   # "local" | "s3"
+    STORAGE_BACKEND: str = "local"   # "local" | "s3" (S3-compatible incl. R2)
     LOCAL_UPLOAD_DIR: str = "/tmp/vendorrecon/uploads"
     S3_BUCKET: str = ""
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "us-east-1"
+    AWS_REGION: str = "auto"          # R2 uses "auto"; AWS uses e.g. "us-east-1"
+    # For Cloudflare R2: https://<accountid>.r2.cloudflarestorage.com
+    # Leave blank for real AWS S3.
+    S3_ENDPOINT_URL: str = ""
 
     # ── Encryption ────────────────────────────────────────────────────────────
     # AES-256 key for files at rest — 32 bytes base64-encoded
