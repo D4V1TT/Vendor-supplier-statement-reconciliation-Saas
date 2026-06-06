@@ -32,13 +32,37 @@ logger = logging.getLogger(__name__)
 
 # ── Category Constants ────────────────────────────────────────────────────────
 
-MATCHED                   = "Matched"
-FLAGGED_AMOUNT_MISMATCH   = "Flagged_Amount_Mismatch"
-FLAGGED_MISSING_IN_LEDGER = "Flagged_Missing_In_Ledger"
-FLAGGED_UNAPPLIED_CREDIT  = "Flagged_Unapplied_Credit"
+MATCHED                      = "Matched"
+FLAGGED_AMOUNT_MISMATCH      = "Flagged_Amount_Mismatch"
+FLAGGED_MISSING_IN_LEDGER    = "Flagged_Missing_In_Ledger"
+FLAGGED_UNAPPLIED_CREDIT     = "Flagged_Unapplied_Credit"
+FLAGGED_LIKELY_MATCH         = "Flagged_Likely_Match"        # fuzzy ID, amounts agree
+FLAGGED_MISSING_IN_STATEMENT = "Flagged_Missing_In_Statement"  # in ledger/ERP only
 
 # Monetary tolerance for "exact match" — adjust if your clients use rounding
 AMOUNT_TOLERANCE: float = 0.01  # $0.01
+
+
+# ── Fuzzy Invoice-ID Normalisation ────────────────────────────────────────────
+# Collapses OCR / formatting differences so INV-10O2 ≈ INV-1002, INV5522 ≈ INV-5522.
+# Common OCR character confusions are folded to a canonical digit/letter.
+_OCR_FOLD = str.maketrans({
+    "O": "0", "Q": "0", "D": "0",
+    "I": "1", "L": "1", "|": "1",
+    "Z": "2", "S": "5", "B": "8", "G": "6", "T": "7",
+})
+
+
+def fuzzy_key(invoice_id: str) -> str:
+    """
+    Produce a normalised key for fuzzy invoice-ID matching:
+      - uppercase
+      - strip every non-alphanumeric char (dashes, spaces, dots, slashes)
+      - fold common OCR look-alikes (O→0, I→1, S→5, …)
+    'INV-10O2' and 'INV1002' both → 'INV1002'.
+    """
+    s = re.sub(r"[^A-Za-z0-9]", "", str(invoice_id).upper())
+    return s.translate(_OCR_FOLD)
 
 
 # ── Result Types ──────────────────────────────────────────────────────────────
@@ -64,7 +88,9 @@ class ReconciliationSummary:
     count_amount_mismatch:   int
     count_missing_in_ledger: int
     count_unapplied_credit:  int
-    total_variance:          float   # sum of all variances (mismatch lines only)
+    total_variance:          float   # sum of all exception variances
+    count_likely_match:         int = 0  # fuzzy ID, amounts agree
+    count_missing_in_statement: int = 0  # in ledger/ERP, not on statement
 
     @property
     def exception_count(self) -> int:
@@ -72,6 +98,8 @@ class ReconciliationSummary:
             self.count_amount_mismatch
             + self.count_missing_in_ledger
             + self.count_unapplied_credit
+            + self.count_likely_match
+            + self.count_missing_in_statement
         )
 
     @property
@@ -101,6 +129,8 @@ class ReconciliationReport:
                 "count_missing_in_ledger": self.summary.count_missing_in_ledger,
                 "count_unapplied_credit":  self.summary.count_unapplied_credit,
                 "total_variance":          round(self.summary.total_variance, 2),
+                "count_likely_match":         self.summary.count_likely_match,
+                "count_missing_in_statement": self.summary.count_missing_in_statement,
                 "exception_count":         self.summary.exception_count,
                 "match_rate_pct":          self.summary.match_rate_pct,
             },
@@ -260,130 +290,141 @@ def reconcile(
     supplier_df = _normalise(supplier_df, "supplier")
     ledger_df   = _normalise(ledger_df,   "ledger")
 
-    # Build a fast-lookup dict from the ledger: {invoice_id -> amount}
-    ledger_index: dict[str, float] = dict(
-        zip(ledger_df["invoice_id"], ledger_df["amount"])
-    )
+    def _safe_float(v) -> float | None:
+        """Parse a possibly-messy value to float; None if not numeric (never raises)."""
+        if v is None or pd.isna(v):
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            cleaned = re.sub(r"[^\d.\-]", "", str(v))
+            try:
+                return float(cleaned) if cleaned not in ("", "-", ".") else None
+            except ValueError:
+                return None
 
-    line_items: list[LineItemResult] = []
+    # Exact index {invoice_id -> amount} and fuzzy index {fuzzy_key -> (id, amount)}
+    ledger_index: dict[str, float] = dict(zip(ledger_df["invoice_id"], ledger_df["amount"]))
+    ledger_fuzzy: dict[str, tuple[str, float]] = {}
+    for lid, lamt in zip(ledger_df["invoice_id"], ledger_df["amount"]):
+        ledger_fuzzy.setdefault(fuzzy_key(lid), (lid, lamt))
 
-    # ── Walk every supplier line ──────────────────────────────────────────────
+    line_items:     list[LineItemResult] = []
+    matched_led_ids: set[str] = set()   # ledger ids consumed by a statement row
+
+    # ── Pass 1: walk every supplier statement line ────────────────────────────
     for _, row in supplier_df.iterrows():
-        inv_id:        str        = row["invoice_id"]
-        supp_amount:   float      = float(row["amount"])
-        inv_date:      str | None = str(row.get("invoice_date", "") or "").strip() or None
-        balance_due:   float | None = (
-            float(row["balance_due"]) if "balance_due" in row and pd.notna(row.get("balance_due")) else None
-        )
+        inv_id      = row["invoice_id"]
+        supp_amount = _safe_float(row["amount"]) or 0.0
+        inv_date    = str(row.get("invoice_date", "") or "").strip() or None
+        balance_due = _safe_float(row.get("balance_due"))
 
         ledger_amount: float | None = ledger_index.get(inv_id)
+        fuzzy_note  = ""
 
-        # ── Rule 4 (checked before Rule 3 to catch credits not in ledger) ─────
-        # Only applies when the company has "flag unapplied credits" enabled.
-        if flag_unapplied_credits and ledger_amount is None and supp_amount < 0:
-            # Ledger has no entry → ledger value is effectively 0, so the full
-            # supplier amount is the discrepancy (variance = supplier - 0).
-            line_items.append(
-                LineItemResult(
-                    invoice_id=inv_id,
-                    invoice_date=inv_date,
-                    supplier_amount=supp_amount,
-                    ledger_amount=None,
-                    variance=round(supp_amount, 2),
-                    category=FLAGGED_UNAPPLIED_CREDIT,
-                    balance_due=balance_due,
-                    notes=(
-                        f"Credit of {supp_amount:,.2f} on supplier statement "
-                        "has no matching entry in the internal ledger."
-                    ),
-                )
-            )
-            continue
-
-        # Credit-flagging disabled: ignore credits absent from the ledger
-        # (don't let them fall through to Rule 3 as "Missing").
-        if not flag_unapplied_credits and ledger_amount is None and supp_amount < 0:
-            continue
-
-        # ── Rule 3 ────────────────────────────────────────────────────────────
+        # If no exact ID match, try a fuzzy (OCR/format-tolerant) match.
         if ledger_amount is None:
-            # Missing from ledger → ledger value is effectively 0, so the full
-            # supplier amount is the discrepancy (variance = supplier - 0).
-            line_items.append(
-                LineItemResult(
-                    invoice_id=inv_id,
-                    invoice_date=inv_date,
-                    supplier_amount=supp_amount,
-                    ledger_amount=None,
-                    variance=round(supp_amount, 2),
-                    category=FLAGGED_MISSING_IN_LEDGER,
-                    balance_due=balance_due,
-                    notes=f"Invoice {inv_id} exists on supplier statement but is absent from internal ledger.",
-                )
-            )
+            cand = ledger_fuzzy.get(fuzzy_key(inv_id))
+            if cand and cand[0] not in matched_led_ids and cand[0] != inv_id:
+                led_id, ledger_amount = cand
+                matched_led_ids.add(led_id)
+                fuzzy_note = f"Fuzzy ID match: '{inv_id}' ≈ ledger '{led_id}'. "
+            # else: stays None → missing / credit handling below
+        else:
+            matched_led_ids.add(inv_id)
+
+        # ── Unapplied credit: negative, not in ledger at all ──────────────────
+        if ledger_amount is None and supp_amount < 0:
+            if not flag_unapplied_credits:
+                continue
+            line_items.append(LineItemResult(
+                invoice_id=inv_id, invoice_date=inv_date, supplier_amount=supp_amount,
+                ledger_amount=None, variance=round(supp_amount, 2),
+                category=FLAGGED_UNAPPLIED_CREDIT, balance_due=balance_due,
+                notes=f"Credit of {supp_amount:,.2f} on supplier statement has no matching entry in the ledger.",
+            ))
             continue
 
-        # Both sides have this invoice — compare amounts
+        # ── Missing in ledger ─────────────────────────────────────────────────
+        if ledger_amount is None:
+            line_items.append(LineItemResult(
+                invoice_id=inv_id, invoice_date=inv_date, supplier_amount=supp_amount,
+                ledger_amount=None, variance=round(supp_amount, 2),
+                category=FLAGGED_MISSING_IN_LEDGER, balance_due=balance_due,
+                notes=f"Invoice {inv_id} exists on supplier statement but is absent from internal ledger.",
+            ))
+            continue
+
+        # ── Both sides present (exact or fuzzy) — compare amounts ─────────────
         variance = round(supp_amount - ledger_amount, 4)
 
-        # ── Rule 1 ────────────────────────────────────────────────────────────
         if abs(variance) <= amount_tolerance:
-            line_items.append(
-                LineItemResult(
-                    invoice_id=inv_id,
-                    invoice_date=inv_date,
-                    supplier_amount=supp_amount,
-                    ledger_amount=ledger_amount,
-                    variance=0.0,   # Normalise tiny floating-point noise to zero
-                    category=MATCHED,
-                    balance_due=balance_due,
-                )
-            )
+            # Amounts agree. If we got here via a fuzzy ID, surface it as a
+            # "Likely Match — verify" so the user confirms the ID difference.
+            if fuzzy_note:
+                line_items.append(LineItemResult(
+                    invoice_id=inv_id, invoice_date=inv_date, supplier_amount=supp_amount,
+                    ledger_amount=ledger_amount, variance=0.0,
+                    category=FLAGGED_LIKELY_MATCH, balance_due=balance_due,
+                    notes=fuzzy_note + "Amounts agree — verify the IDs refer to the same invoice.",
+                ))
+            else:
+                line_items.append(LineItemResult(
+                    invoice_id=inv_id, invoice_date=inv_date, supplier_amount=supp_amount,
+                    ledger_amount=ledger_amount, variance=0.0,
+                    category=MATCHED, balance_due=balance_due,
+                ))
             continue
 
-        # ── Rule 2 ────────────────────────────────────────────────────────────
-        line_items.append(
-            LineItemResult(
-                invoice_id=inv_id,
-                invoice_date=inv_date,
-                supplier_amount=supp_amount,
-                ledger_amount=ledger_amount,
-                variance=round(variance, 2),
-                category=FLAGGED_AMOUNT_MISMATCH,
-                balance_due=balance_due,
-                notes=(
-                    f"Supplier: {supp_amount:,.2f} | Ledger: {ledger_amount:,.2f} | "
-                    f"Variance: {variance:+,.2f}"
-                ),
-            )
-        )
+        # Amounts differ → mismatch (note fuzzy ID if applicable)
+        line_items.append(LineItemResult(
+            invoice_id=inv_id, invoice_date=inv_date, supplier_amount=supp_amount,
+            ledger_amount=ledger_amount, variance=round(variance, 2),
+            category=FLAGGED_AMOUNT_MISMATCH, balance_due=balance_due,
+            notes=fuzzy_note + f"Supplier: {supp_amount:,.2f} | Ledger: {ledger_amount:,.2f} | Variance: {variance:+,.2f}",
+        ))
+
+    n_statement_lines = len(line_items)  # match-rate denominator (statement-driven)
+
+    # ── Pass 2: bidirectional — ledger rows never matched by any statement row ─
+    for lid, lamt in zip(ledger_df["invoice_id"], ledger_df["amount"]):
+        if lid in matched_led_ids:
+            continue
+        lamt_f = _safe_float(lamt) or 0.0
+        kind = "Credit memo" if lamt_f < 0 else "Invoice"
+        line_items.append(LineItemResult(
+            invoice_id=lid, invoice_date=None,
+            supplier_amount=0.0,           # not present on the statement
+            ledger_amount=lamt_f,
+            variance=round(-lamt_f, 2),    # statement(0) - ledger
+            category=FLAGGED_MISSING_IN_STATEMENT, balance_due=None,
+            notes=f"{kind} {lid} ({lamt_f:,.2f}) is in the internal ledger but absent from the vendor statement.",
+        ))
 
     # ── Build summary KPIs ────────────────────────────────────────────────────
     categories = [li.category for li in line_items]
-    # Total variance = sum of ALL discrepancies (mismatches + missing + credits),
-    # i.e. total unreconciled exposure between supplier statement and ledger.
     total_variance = sum(
         li.variance for li in line_items
         if li.category != MATCHED and li.variance is not None
     )
 
     summary = ReconciliationSummary(
-        total_supplier_lines=len(line_items),
+        total_supplier_lines=n_statement_lines,
         count_matched=categories.count(MATCHED),
         count_amount_mismatch=categories.count(FLAGGED_AMOUNT_MISMATCH),
         count_missing_in_ledger=categories.count(FLAGGED_MISSING_IN_LEDGER),
         count_unapplied_credit=categories.count(FLAGGED_UNAPPLIED_CREDIT),
         total_variance=total_variance,
+        count_likely_match=categories.count(FLAGGED_LIKELY_MATCH),
+        count_missing_in_statement=categories.count(FLAGGED_MISSING_IN_STATEMENT),
     )
 
     logger.info(
-        "Reconciliation complete: %d lines | matched=%d | mismatch=%d | "
-        "missing=%d | credits=%d | total_variance=%.2f",
-        summary.total_supplier_lines,
-        summary.count_matched,
-        summary.count_amount_mismatch,
-        summary.count_missing_in_ledger,
-        summary.count_unapplied_credit,
+        "Reconciliation complete: %d statement lines | matched=%d likely=%d mismatch=%d "
+        "missing_ledger=%d credits=%d missing_stmt=%d | variance=%.2f",
+        n_statement_lines, summary.count_matched, summary.count_likely_match,
+        summary.count_amount_mismatch, summary.count_missing_in_ledger,
+        summary.count_unapplied_credit, summary.count_missing_in_statement,
         summary.total_variance,
     )
 

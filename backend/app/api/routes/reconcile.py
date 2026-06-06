@@ -629,13 +629,20 @@ async def export_xlsx(
 def _build_summary_dict(job: ReconciliationJob) -> dict:
     total   = job.total_supplier_lines or 0
     matched = job.count_matched or 0
+    mism    = job.count_amount_mismatch or 0
+    miss_l  = job.count_missing_in_ledger or 0
+    cred    = job.count_unapplied_credit or 0
+    likely  = job.count_likely_match or 0
+    miss_s  = job.count_missing_in_statement or 0
     return {
-        "total_supplier_lines":    total,
-        "count_matched":           matched,
-        "count_amount_mismatch":   job.count_amount_mismatch or 0,
-        "count_missing_in_ledger": job.count_missing_in_ledger or 0,
-        "count_unapplied_credit":  job.count_unapplied_credit or 0,
-        "total_variance":          float(job.total_variance or 0),
-        "exception_count":         (job.count_amount_mismatch or 0) + (job.count_missing_in_ledger or 0) + (job.count_unapplied_credit or 0),
-        "match_rate_pct":          round(matched / max(total, 1) * 100, 1),
+        "total_supplier_lines":       total,
+        "count_matched":              matched,
+        "count_amount_mismatch":      mism,
+        "count_missing_in_ledger":    miss_l,
+        "count_unapplied_credit":     cred,
+        "count_likely_match":         likely,
+        "count_missing_in_statement": miss_s,
+        "total_variance":             float(job.total_variance or 0),
+        "exception_count":            mism + miss_l + cred + likely + miss_s,
+        "match_rate_pct":             round(matched / max(total, 1) * 100, 1),
     }

@@ -26,15 +26,19 @@ const FEATURES = [
 ];
 
 const catColor: Record<string, string> = {
-  "Flagged_Amount_Mismatch":   "bg-red-50 text-red-700 ring-red-200",
-  "Flagged_Missing_In_Ledger": "bg-amber-50 text-amber-700 ring-amber-200",
-  "Flagged_Unapplied_Credit":  "bg-violet-50 text-violet-700 ring-violet-200",
+  "Flagged_Amount_Mismatch":      "bg-red-50 text-red-700 ring-red-200",
+  "Flagged_Missing_In_Ledger":    "bg-amber-50 text-amber-700 ring-amber-200",
+  "Flagged_Unapplied_Credit":     "bg-violet-50 text-violet-700 ring-violet-200",
+  "Flagged_Likely_Match":         "bg-blue-50 text-blue-700 ring-blue-200",
+  "Flagged_Missing_In_Statement": "bg-slate-100 text-slate-700 ring-slate-200",
 };
 
 const catLabel: Record<string, string> = {
-  "Flagged_Amount_Mismatch":   "Amount Mismatch",
-  "Flagged_Missing_In_Ledger": "Missing in Ledger",
-  "Flagged_Unapplied_Credit":  "Unapplied Credit",
+  "Flagged_Amount_Mismatch":      "Amount Mismatch",
+  "Flagged_Missing_In_Ledger":    "Missing in Ledger",
+  "Flagged_Unapplied_Credit":     "Unapplied Credit",
+  "Flagged_Likely_Match":         "Likely Match",
+  "Flagged_Missing_In_Statement": "Missing in Statement",
 };
 
 function fmt(n: number | null) {

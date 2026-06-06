@@ -368,7 +368,9 @@ export default function DashboardPage() {
                   ) : (
                     <>
                       <ExceptionsTable title="Amount Mismatches" description="Invoices found in both sources but with differing amounts" items={report.amount_mismatches.items} color="red" icon={Icons.warning} />
+                      <ExceptionsTable title="Likely Matches — verify" description="Invoice IDs nearly match (OCR / format difference) and amounts agree — confirm they're the same invoice" items={report.likely_matches.items} color="blue" icon={Icons.check} />
                       <ExceptionsTable title="Missing in Ledger" description="Invoices present on vendor statement but absent from internal AP ledger" items={report.missing_in_ledger.items} color="amber" icon={Icons.missing} />
+                      <ExceptionsTable title="Missing in Statement" description="Invoices/credits in your AP ledger but absent from the vendor statement" items={report.missing_in_statement.items} color="slate" icon={Icons.table} />
                       <ExceptionsTable title="Unapplied Credits" description="Credit notes on vendor statement not deducted in internal ledger" items={report.unapplied_credits.items} color="violet" icon={Icons.credit} />
                     </>
                   )}

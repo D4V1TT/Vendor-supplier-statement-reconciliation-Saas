@@ -128,10 +128,12 @@ class ExceptionsReportResponse(BaseModel):
     # ── KPI summary ───────────────────────────────────────────────────────────
     summary: dict[str, Any]   # matches ReconciliationSummary.to_dict()["summary"]
 
-    # ── Three exception buckets ───────────────────────────────────────────────
+    # ── Exception buckets ─────────────────────────────────────────────────────
     amount_mismatches:    ExceptionsBucket
     missing_in_ledger:   ExceptionsBucket
     unapplied_credits:   ExceptionsBucket
+    likely_matches:      ExceptionsBucket
+    missing_in_statement: ExceptionsBucket
 
     # ── Matched lines (included but noted as "clean") ─────────────────────────
     matched_count: int
@@ -153,7 +155,9 @@ def build_exceptions_report(
     """
     from app.engine.reconciler import (  # noqa: PLC0415
         FLAGGED_AMOUNT_MISMATCH,
+        FLAGGED_LIKELY_MATCH,
         FLAGGED_MISSING_IN_LEDGER,
+        FLAGGED_MISSING_IN_STATEMENT,
         FLAGGED_UNAPPLIED_CREDIT,
         MATCHED,
     )
@@ -163,10 +167,12 @@ def build_exceptions_report(
 
     def _bucket(category: str) -> ExceptionsBucket:
         items = [LineItemOut(**li) for li in all_items if li["category"] == category]
+        # For ledger-only items the value lives in ledger_amount, not supplier_amount.
+        total = sum(abs(i.supplier_amount or i.ledger_amount or 0) for i in items)
         return ExceptionsBucket(
             category=category,
             count=len(items),
-            total_amount=sum(abs(i.supplier_amount) for i in items),
+            total_amount=total,
             items=items,
         )
 
@@ -177,6 +183,8 @@ def build_exceptions_report(
         amount_mismatches=_bucket(FLAGGED_AMOUNT_MISMATCH),
         missing_in_ledger=_bucket(FLAGGED_MISSING_IN_LEDGER),
         unapplied_credits=_bucket(FLAGGED_UNAPPLIED_CREDIT),
+        likely_matches=_bucket(FLAGGED_LIKELY_MATCH),
+        missing_in_statement=_bucket(FLAGGED_MISSING_IN_STATEMENT),
         matched_count=summary["count_matched"],
         export_url=f"/api/jobs/{job_id}/export/xlsx",
     )

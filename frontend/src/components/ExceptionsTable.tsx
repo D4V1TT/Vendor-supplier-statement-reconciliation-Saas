@@ -7,7 +7,7 @@ interface ExceptionsTableProps {
   title:       string;
   description: string;
   items:       LineItem[];
-  color:       "red" | "amber" | "violet";
+  color:       "red" | "amber" | "violet" | "blue" | "slate";
   icon:        React.ReactNode;
 }
 
@@ -40,6 +40,26 @@ const palette = {
     iconBg:  "bg-violet-100 text-violet-500",
     rowHover:"hover:bg-violet-50/40",
     varPos:  "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
+    varNeg:  "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  },
+  blue: {
+    header:  "bg-blue-50 border-blue-100",
+    title:   "text-blue-900",
+    desc:    "text-blue-400",
+    badge:   "bg-blue-100 text-blue-600",
+    iconBg:  "bg-blue-100 text-blue-500",
+    rowHover:"hover:bg-blue-50/40",
+    varPos:  "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+    varNeg:  "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  },
+  slate: {
+    header:  "bg-slate-50 border-slate-200",
+    title:   "text-slate-800",
+    desc:    "text-slate-400",
+    badge:   "bg-slate-200 text-slate-600",
+    iconBg:  "bg-slate-200 text-slate-500",
+    rowHover:"hover:bg-slate-50",
+    varPos:  "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
     varNeg:  "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   },
 };

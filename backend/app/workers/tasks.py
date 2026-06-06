@@ -72,14 +72,16 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
             report_dict = report.to_dict()
             s = report.summary
 
-            job.status                  = JobStatus.COMPLETED
-            job.total_supplier_lines    = s.total_supplier_lines
-            job.count_matched           = s.count_matched
-            job.count_amount_mismatch   = s.count_amount_mismatch
-            job.count_missing_in_ledger = s.count_missing_in_ledger
-            job.count_unapplied_credit  = s.count_unapplied_credit
-            job.total_variance          = s.total_variance
-            job.line_items              = report_dict["line_items"]
+            job.status                     = JobStatus.COMPLETED
+            job.total_supplier_lines       = s.total_supplier_lines
+            job.count_matched              = s.count_matched
+            job.count_amount_mismatch      = s.count_amount_mismatch
+            job.count_missing_in_ledger    = s.count_missing_in_ledger
+            job.count_unapplied_credit     = s.count_unapplied_credit
+            job.count_likely_match         = s.count_likely_match
+            job.count_missing_in_statement = s.count_missing_in_statement
+            job.total_variance             = s.total_variance
+            job.line_items                 = report_dict["line_items"]
 
             logger.info("Job %s completed: %d lines, %d exceptions", job_id,
                         s.total_supplier_lines, s.exception_count)

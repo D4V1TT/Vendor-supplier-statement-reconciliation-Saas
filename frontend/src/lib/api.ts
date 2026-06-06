@@ -59,25 +59,29 @@ export interface ExceptionsBucket {
 }
 
 export interface ReportSummary {
-  total_supplier_lines:    number;
-  count_matched:           number;
-  count_amount_mismatch:   number;
-  count_missing_in_ledger: number;
-  count_unapplied_credit:  number;
-  total_variance:          number;
-  exception_count:         number;
-  match_rate_pct:          number;
+  total_supplier_lines:       number;
+  count_matched:              number;
+  count_amount_mismatch:      number;
+  count_missing_in_ledger:    number;
+  count_unapplied_credit:     number;
+  count_likely_match:         number;
+  count_missing_in_statement: number;
+  total_variance:             number;
+  exception_count:            number;
+  match_rate_pct:             number;
 }
 
 export interface ExceptionsReport {
-  job_id:             string;
-  status:             string;
-  summary:            ReportSummary;
-  amount_mismatches:  ExceptionsBucket;
-  missing_in_ledger:  ExceptionsBucket;
-  unapplied_credits:  ExceptionsBucket;
-  matched_count:      number;
-  export_url:         string;
+  job_id:               string;
+  status:               string;
+  summary:              ReportSummary;
+  amount_mismatches:    ExceptionsBucket;
+  missing_in_ledger:    ExceptionsBucket;
+  unapplied_credits:    ExceptionsBucket;
+  likely_matches:       ExceptionsBucket;
+  missing_in_statement: ExceptionsBucket;
+  matched_count:        number;
+  export_url:           string;
 }
 
 export interface Job {
