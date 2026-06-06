@@ -77,26 +77,43 @@ async def get_current_user(
         user = await db.scalar(select(User).where(User.clerk_id == clerk_id))
 
         if not user:
-            # First sign-in — create a company + user record
-            safe_email = email or f"{clerk_id}@clerk.local"
-            company = Company(
-                name=full_name or safe_email.split("@")[0],
-                slug=f"{safe_email.replace('@', '-').replace('.', '-')}-{clerk_id[-6:]}",
-            )
-            db.add(company)
-            await db.flush()
+            # First sign-in — create a company + user record.
+            # NOTE: a fresh dashboard load fires several requests at once; they
+            # race to provision. Handle the unique-constraint conflict by
+            # rolling back and re-querying the row the winning request created.
+            import uuid as _uuid  # noqa: PLC0415
+            from sqlalchemy.exc import IntegrityError  # noqa: PLC0415
 
-            user = User(
-                company_id=company.id,
-                clerk_id=clerk_id,
-                email=safe_email,
-                hashed_password="",       # no password — Clerk owns auth
-                full_name=full_name or safe_email,
-                role="admin",
-            )
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
+            safe_email = email or f"{clerk_id}@clerk.local"
+            try:
+                company = Company(
+                    name=full_name or safe_email.split("@")[0],
+                    # Unique-safe slug: clerk_id + short random suffix
+                    slug=f"{clerk_id[-12:].lower()}-{_uuid.uuid4().hex[:6]}",
+                )
+                db.add(company)
+                await db.flush()
+
+                user = User(
+                    company_id=company.id,
+                    clerk_id=clerk_id,
+                    email=safe_email,
+                    hashed_password="",       # no password — Clerk owns auth
+                    full_name=full_name or safe_email,
+                    role="admin",
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+            except IntegrityError:
+                # Another concurrent request already provisioned this user.
+                await db.rollback()
+                user = await db.scalar(select(User).where(User.clerk_id == clerk_id))
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Account is being set up — please retry.",
+                    )
         elif _is_placeholder(user.email) and not _is_placeholder(email):
             # Backfill: existing user had a placeholder email — update it now.
             user.email = email

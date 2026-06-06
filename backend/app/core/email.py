@@ -52,6 +52,7 @@ def send_email(to: str, subject: str, html_body: str, text_body: str | None = No
 def reconciliation_complete_email(vendor_name: str, summary: dict, job_id: str) -> tuple[str, str]:
     """Returns (subject, html_body) for a completed reconciliation."""
     exc = summary.get("exception_count", 0)
+    report_url = f"{settings.APP_BASE_URL.rstrip('/')}/dashboard?job={job_id}"
     subject = (
         f"✅ Reconciliation complete — {vendor_name}: {exc} exception"
         f"{'s' if exc != 1 else ''} found"
@@ -67,7 +68,7 @@ def reconciliation_complete_email(vendor_name: str, summary: dict, job_id: str) 
         <tr><td style="padding:8px 0">Missing in ledger</td><td style="text-align:right;color:#f59e0b"><b>{summary.get('count_missing_in_ledger',0)}</b></td></tr>
         <tr><td style="padding:8px 0">Unapplied credits</td><td style="text-align:right;color:#8b5cf6"><b>{summary.get('count_unapplied_credit',0)}</b></td></tr>
       </table>
-      <a href="#" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600">View full report</a>
+      <a href="{report_url}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600">View full report</a>
       <p style="color:#94a3b8;font-size:12px;margin-top:24px">VendorRecon · AP Statement Reconciliation</p>
     </div>
     """
@@ -76,6 +77,7 @@ def reconciliation_complete_email(vendor_name: str, summary: dict, job_id: str) 
 
 def weekly_digest_email(company_name: str, stats: dict) -> tuple[str, str]:
     """Returns (subject, html) for the weekly digest of the last 7 days."""
+    history_url = f"{settings.APP_BASE_URL.rstrip('/')}/history"
     subject = f"📊 Your weekly reconciliation digest — {company_name}"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
@@ -87,6 +89,7 @@ def weekly_digest_email(company_name: str, stats: dict) -> tuple[str, str]:
         <tr><td style="padding:8px 0">Total exceptions</td><td style="text-align:right;color:#ef4444"><b>{stats.get('exceptions',0)}</b></td></tr>
         <tr><td style="padding:8px 0">Net variance</td><td style="text-align:right"><b>${stats.get('variance',0):,.2f}</b></td></tr>
       </table>
+      <a href="{history_url}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600">View all reconciliations</a>
       <p style="color:#94a3b8;font-size:12px;margin-top:24px">
         VendorRecon · You're receiving this because weekly digest is on in Settings.
       </p>

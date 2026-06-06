@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "VendorRecon"
     DEBUG: bool = False
     API_PREFIX: str = "/api"
+    # Public frontend URL — used to build links in emails (e.g. report links).
+    APP_BASE_URL: str = "http://localhost:3000"
 
     # ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: str  # e.g. postgresql+asyncpg://user:pass@localhost/vendorrecon
