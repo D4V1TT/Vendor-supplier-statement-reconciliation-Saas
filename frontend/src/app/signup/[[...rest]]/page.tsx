@@ -1,10 +1,10 @@
-import { SignIn } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 
-export default function LoginPage() {
+export default function SignUpPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="flex flex-col items-center gap-6">
-        {/* Logo above the Clerk widget */}
+        {/* Logo */}
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
@@ -18,8 +18,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Clerk drop-in: email/password + Google + Microsoft out of the box */}
-        <SignIn
+        {/* Clerk drop-in sign-up with email verification + Google + Microsoft */}
+        <SignUp
           appearance={{
             elements: {
               rootBox: "shadow-sm",
