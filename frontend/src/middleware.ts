@@ -11,6 +11,7 @@ const isPublic = createRouteMatcher([
   "/privacy(.*)",
   "/refund(.*)",
   "/contact(.*)",
+  "/icon(.*)",        // generated PNG favicon route (no file extension)
   "/api/webhooks(.*)",
 ]);
 
