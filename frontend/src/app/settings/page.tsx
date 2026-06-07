@@ -138,7 +138,7 @@ export default function SettingsPage() {
   const [flagCredits,     setFlagCredits]     = useState(true);
 
   // Billing
-  const [plan, setPlan]         = useState("free");
+  const [plan, setPlan]         = useState<string | null>(null);  // null = not loaded yet
   const [billingBusy, setBillingBusy] = useState(false);
   const [companyId,   setCompanyId]   = useState("");
   const [paddleReady, setPaddleReady] = useState(false);
@@ -406,21 +406,29 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-slate-700">Current plan</p>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                      plan === "free"
-                        ? "bg-slate-100 text-slate-600"
-                        : "bg-indigo-100 text-indigo-700"
-                    }`}>
-                      {plan === "free" ? "Free" : plan.charAt(0).toUpperCase() + plan.slice(1)}
-                    </span>
+                    {plan === null ? (
+                      <span className="rounded-full px-2.5 py-0.5 text-xs font-bold bg-slate-100 text-slate-400 animate-pulse">…</span>
+                    ) : (
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        plan === "free"
+                          ? "bg-slate-100 text-slate-600"
+                          : "bg-indigo-100 text-indigo-700"
+                      }`}>
+                        {plan === "free" ? "Free" : plan.charAt(0).toUpperCase() + plan.slice(1)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    {plan === "free"
+                    {plan === null
+                      ? "Checking your subscription…"
+                      : plan === "free"
                       ? "Standard parsing (CSV, Excel, clean PDFs, OCR). Upgrade for AI extraction on tough files."
                       : "AI extraction enabled. Manage or cancel anytime."}
                   </p>
                 </div>
-                {plan === "free" ? (
+                {plan === null ? (
+                  <div className="h-[42px] w-32 rounded-xl bg-slate-100 animate-pulse" />
+                ) : plan === "free" ? (
                   <button
                     onClick={handleUpgrade}
                     disabled={!paddleReady}
