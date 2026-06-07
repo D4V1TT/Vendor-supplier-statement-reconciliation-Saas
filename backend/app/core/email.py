@@ -122,6 +122,29 @@ def reconciliation_complete_email(vendor_name: str, summary: dict, job_id: str) 
     return subject, html
 
 
+def exceptions_alert_email(vendor_name: str, summary: dict, job_id: str) -> tuple[str, str]:
+    """Returns (subject, html) for a reconciliation that found discrepancies."""
+    exc = summary.get("exception_count", 0)
+    report_url = f"{settings.APP_BASE_URL.rstrip('/')}/dashboard?job={job_id}"
+    subject = f"⚠️ {exc} discrepanc{'y' if exc == 1 else 'ies'} found — {vendor_name}"
+    html = f"""
+    <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
+      <h2 style="color:#dc2626;margin-bottom:4px">Discrepancies found</h2>
+      <p style="color:#64748b;margin-top:0">Vendor: <b>{vendor_name}</b> — {exc} item{'s' if exc != 1 else ''} need review</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:8px 0">Amount mismatches</td><td style="text-align:right;color:#ef4444"><b>{summary.get('count_amount_mismatch',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Missing in ledger</td><td style="text-align:right;color:#f59e0b"><b>{summary.get('count_missing_in_ledger',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Duplicate invoices</td><td style="text-align:right;color:#ef4444"><b>{summary.get('count_duplicate',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Unapplied credits</td><td style="text-align:right;color:#8b5cf6"><b>{summary.get('count_unapplied_credit',0)}</b></td></tr>
+        <tr><td style="padding:8px 0">Missing in statement</td><td style="text-align:right;color:#f59e0b"><b>{summary.get('count_missing_in_statement',0)}</b></td></tr>
+      </table>
+      <a href="{report_url}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600">Review discrepancies</a>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">VendorRecon · You're receiving this because "Email on exceptions found" is on.</p>
+    </div>
+    """
+    return subject, html
+
+
 def weekly_digest_email(company_name: str, stats: dict) -> tuple[str, str]:
     """Returns (subject, html) for the weekly digest of the last 7 days."""
     history_url = f"{settings.APP_BASE_URL.rstrip('/')}/history"

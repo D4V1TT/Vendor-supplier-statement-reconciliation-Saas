@@ -101,14 +101,20 @@ async def run_reconciliation(ctx: dict, job_id: str) -> None:
 
 async def _maybe_send_completion_email(db: AsyncSession, job: ReconciliationJob) -> None:
     """Send a completion email respecting the creating user's preferences."""
-    from app.core.email import reconciliation_complete_email, send_email  # noqa: PLC0415
+    from app.core.email import (  # noqa: PLC0415
+        exceptions_alert_email,
+        reconciliation_complete_email,
+        send_email,
+    )
     from app.db.models.models import User  # noqa: PLC0415
 
     user = await db.get(User, job.created_by)
     if not user or not user.email:
         return
 
-    exceptions = (job.count_amount_mismatch or 0) + (job.count_missing_in_ledger or 0) + (job.count_unapplied_credit or 0)
+    exceptions = ((job.count_amount_mismatch or 0) + (job.count_missing_in_ledger or 0)
+                  + (job.count_unapplied_credit or 0) + (job.count_duplicate or 0)
+                  + (job.count_missing_in_statement or 0))
 
     # Decide whether to send based on the user's toggles
     want_completion = user.notify_on_completion
@@ -120,14 +126,22 @@ async def _maybe_send_completion_email(db: AsyncSession, job: ReconciliationJob)
     statement = await db.get(UploadedStatement, job.statement_id)
     vendor    = statement.vendor_name if statement else "Vendor"
     summary   = {
-        "total_supplier_lines":    job.total_supplier_lines or 0,
-        "count_matched":           job.count_matched or 0,
-        "count_amount_mismatch":   job.count_amount_mismatch or 0,
-        "count_missing_in_ledger": job.count_missing_in_ledger or 0,
-        "count_unapplied_credit":  job.count_unapplied_credit or 0,
-        "exception_count":         exceptions,
+        "total_supplier_lines":       job.total_supplier_lines or 0,
+        "count_matched":              job.count_matched or 0,
+        "count_amount_mismatch":      job.count_amount_mismatch or 0,
+        "count_missing_in_ledger":    job.count_missing_in_ledger or 0,
+        "count_unapplied_credit":     job.count_unapplied_credit or 0,
+        "count_duplicate":            job.count_duplicate or 0,
+        "count_missing_in_statement": job.count_missing_in_statement or 0,
+        "exception_count":            exceptions,
     }
-    subject, html = reconciliation_complete_email(vendor, summary, str(job.id))
+    # When there are discrepancies and the user wants exception alerts, send the
+    # alert (it takes priority); otherwise send the completion summary. Exactly
+    # one email per job.
+    if exceptions > 0 and want_exceptions:
+        subject, html = exceptions_alert_email(vendor, summary, str(job.id))
+    else:
+        subject, html = reconciliation_complete_email(vendor, summary, str(job.id))
     send_email(user.email, subject, html)
 
 
