@@ -1,4 +1,5 @@
 import React from "react";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 
 export const CONTACT_EMAIL = "vendorreconorg@gmail.com";
 
@@ -25,7 +26,12 @@ export function LegalShell({
       <header className="border-b border-slate-100">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <a href="/" className="font-extrabold text-indigo-600">VendorRecon</a>
-          <a href="/login" className="text-sm text-slate-500 hover:text-slate-800 transition-colors">Sign in</a>
+          <SignedOut>
+            <a href="/login" className="text-sm text-slate-500 hover:text-slate-800 transition-colors">Sign in</a>
+          </SignedOut>
+          <SignedIn>
+            <a href="/dashboard" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Go to dashboard →</a>
+          </SignedIn>
         </div>
       </header>
 
