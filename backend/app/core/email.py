@@ -11,16 +11,63 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import httpx
+
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _resend_api_key() -> str:
+    """Resend API key for HTTPS sending, if available."""
+    if settings.RESEND_API_KEY:
+        return settings.RESEND_API_KEY
+    # The Resend SMTP password is itself a Resend API key (re_...), so reuse it.
+    if "resend" in settings.SMTP_HOST.lower() and settings.SMTP_PASSWORD.startswith("re_"):
+        return settings.SMTP_PASSWORD
+    return ""
+
+
+def _send_via_resend_api(api_key: str, to: str, subject: str,
+                         html_body: str, text_body: str | None) -> bool:
+    """
+    Send via Resend's HTTPS API (port 443). Preferred over SMTP because many
+    hosts (e.g. Railway) block outbound SMTP ports (25/465/587), making smtplib
+    time out.
+    """
+    payload: dict = {"from": settings.SMTP_FROM, "to": [to], "subject": subject, "html": html_body}
+    if text_body:
+        payload["text"] = text_body
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=payload,
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            logger.error("Resend API send to %s failed: %s %s", to, resp.status_code, resp.text)
+            return False
+        logger.info("Email sent to %s: %s (Resend API)", to, subject)
+        return True
+    except Exception as exc:
+        logger.error("Resend API error sending to %s: %s", to, exc)
+        return False
+
+
 def send_email(to: str, subject: str, html_body: str, text_body: str | None = None) -> bool:
     """
     Send an HTML email. Returns True if sent (or logged in dev mode), False on error.
+
+    Prefers Resend's HTTPS API (works where outbound SMTP ports are blocked, e.g.
+    Railway); falls back to SMTP for other providers; logs without sending if
+    neither is configured (dev mode).
     """
+    api_key = _resend_api_key()
+    if api_key:
+        return _send_via_resend_api(api_key, to, subject, html_body, text_body)
+
     if not settings.SMTP_HOST:
         logger.info("[EMAIL — dev mode, not sent] to=%s | subject=%s", to, subject)
         return True  # treat as success so the flow continues

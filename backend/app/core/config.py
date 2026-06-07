@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "VendorRecon <noreply@vendorrecon.org>"
     SMTP_USE_TLS: bool = True
+    # Resend HTTPS API key (re_...). Preferred over SMTP because hosts like
+    # Railway block outbound SMTP ports. If blank, a Resend SMTP_PASSWORD is
+    # reused automatically.
+    RESEND_API_KEY: str = ""
 
     # ── AI Fallback (Anthropic) ───────────────────────────────────────────────
     ANTHROPIC_API_KEY: str = ""
