@@ -189,10 +189,8 @@ export const api = {
   getUsage: () =>
     request<ReconUsage>("/usage"),
 
-  // Billing (Lemon Squeezy) — returns a hosted URL to redirect the user to
-  startCheckout: () =>
-    request<{ url: string }>("/billing/checkout", { method: "POST" }),
-
+  // Billing portal (Paddle) — returns a hosted URL to redirect the user to.
+  // Checkout itself runs client-side via Paddle.js (see settings page).
   openBillingPortal: () =>
     request<{ url: string }>("/billing/portal", { method: "POST" }),
 

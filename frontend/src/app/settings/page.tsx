@@ -1,10 +1,32 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import Script from "next/script";
 import { useUser } from "@clerk/nextjs";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { api } from "@/lib/api";
+
+// ── Paddle.js (loaded via the CDN <Script> in the page below) ──────────────────
+const PADDLE_ENV   = (process.env.NEXT_PUBLIC_PADDLE_ENV ?? "production") as "sandbox" | "production";
+const PADDLE_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? "";
+const PADDLE_PRICE = process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO ?? "";
+
+interface PaddleGlobal {
+  Environment: { set: (env: string) => void };
+  Initialize: (opts: { token: string }) => void;
+  Checkout: {
+    open: (opts: {
+      items: { priceId: string; quantity: number }[];
+      customer?: { email?: string };
+      customData?: Record<string, string>;
+      settings?: { displayMode?: string; theme?: string; successUrl?: string };
+    }) => void;
+  };
+}
+declare global {
+  interface Window { Paddle?: PaddleGlobal }
+}
 
 // ── Label ↔ backend-value maps ────────────────────────────────────────────────
 const CURRENCY_OPTIONS = [
@@ -118,6 +140,9 @@ export default function SettingsPage() {
   // Billing
   const [plan, setPlan]         = useState("free");
   const [billingBusy, setBillingBusy] = useState(false);
+  const [companyId,   setCompanyId]   = useState("");
+  const [paddleReady, setPaddleReady] = useState(false);
+  const paddleInit = useRef(false);
 
   // Seed profile from Clerk on load
   useEffect(() => {
@@ -129,7 +154,7 @@ export default function SettingsPage() {
   // Load the real company name from our backend (Company table)
   useEffect(() => {
     api.getCompany()
-      .then(c => setCompanyName(c.name))
+      .then(c => { setCompanyName(c.name); setCompanyId(c.id); })
       .catch(() => { /* leave blank if not reachable yet */ });
   }, []);
 
@@ -147,22 +172,51 @@ export default function SettingsPage() {
       .catch(() => { /* keep defaults */ });
   }, []);
 
-  async function handleUpgrade() {
-    setBillingBusy(true);
+  // Initialize Paddle.js once the CDN script is available (idempotent).
+  function initPaddle() {
+    if (paddleInit.current || typeof window === "undefined" || !window.Paddle) return;
+    paddleInit.current = true;
     try {
-      const { url } = await api.startCheckout();
-      window.location.href = url;        // redirect to Lemon Squeezy checkout
-    } catch (e: any) {
-      alert(e.message ?? "Could not start checkout.");
-      setBillingBusy(false);
+      if (PADDLE_ENV === "sandbox") window.Paddle.Environment.set("sandbox");
+      if (PADDLE_TOKEN) window.Paddle.Initialize({ token: PADDLE_TOKEN });
+      setPaddleReady(true);
+    } catch {
+      paddleInit.current = false; // allow a retry on next mount/load
     }
+  }
+
+  // If the script was already loaded (e.g. client-side nav), init on mount.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.Paddle) initPaddle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleUpgrade() {
+    if (!paddleReady || !window.Paddle) {
+      alert("Checkout is still loading — please try again in a moment.");
+      return;
+    }
+    if (!PADDLE_TOKEN || !PADDLE_PRICE) {
+      alert("Billing isn't configured yet.");
+      return;
+    }
+    window.Paddle.Checkout.open({
+      items: [{ priceId: PADDLE_PRICE, quantity: 1 }],
+      ...(email ? { customer: { email } } : {}),
+      ...(companyId ? { customData: { company_id: companyId } } : {}),
+      settings: {
+        displayMode: "overlay",
+        theme: "light",
+        successUrl: `${window.location.origin}/settings?upgraded=1`,
+      },
+    });
   }
 
   async function handleManageBilling() {
     setBillingBusy(true);
     try {
       const { url } = await api.openBillingPortal();
-      window.location.href = url;        // redirect to Lemon Squeezy customer portal
+      window.location.href = url;        // redirect to Paddle customer portal
     } catch (e: any) {
       alert(e.message ?? "Could not open billing portal.");
       setBillingBusy(false);
@@ -260,6 +314,8 @@ export default function SettingsPage() {
         <Sidebar />
         <main className="flex-1 ml-60 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
+
+            <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={initPaddle} />
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -367,9 +423,9 @@ export default function SettingsPage() {
                 {plan === "free" ? (
                   <button
                     onClick={handleUpgrade}
-                    disabled={billingBusy}
+                    disabled={!paddleReady}
                     className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-wait">
-                    {billingBusy ? "Redirecting…" : "Upgrade to Pro"}
+                    {paddleReady ? "Upgrade to Pro" : "Loading…"}
                   </button>
                 ) : (
                   <button

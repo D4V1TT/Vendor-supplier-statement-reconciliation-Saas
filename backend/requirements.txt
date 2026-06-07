@@ -42,7 +42,7 @@ boto3==1.34.100                   # S3 (or local FS adapter, see core/storage.py
 anthropic==0.26.0
 
 # ── Payments ──────────────────────────────────────────────────────────────────
-# Lemon Squeezy (Merchant of Record) is called over plain HTTPS via httpx
+# Paddle Billing (Merchant of Record) is called over plain HTTPS via httpx
 # (declared at the top), so no payment-provider SDK is required.
 
 # ── Dev / Test ────────────────────────────────────────────────────────────────
