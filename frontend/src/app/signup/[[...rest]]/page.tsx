@@ -37,6 +37,12 @@ export default function SignUpPage() {
           }}
         />
 
+        <p className="text-xs text-slate-400 text-center max-w-xs">
+          By creating an account you agree to our{" "}
+          <a href="/terms" className="text-indigo-600 hover:underline">Terms of Service</a> and{" "}
+          <a href="/privacy" className="text-indigo-600 hover:underline">Privacy Policy</a>.
+        </p>
+
         <p className="text-xs text-slate-400">
           Your data is encrypted at rest with AES-256.
         </p>
