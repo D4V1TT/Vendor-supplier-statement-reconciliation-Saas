@@ -169,7 +169,9 @@ async def paddle_webhook(
         company.plan = plan
         if sub_id:
             company.stripe_subscription_id = str(sub_id)
-        if customer_id and not company.stripe_customer_id:
+        if customer_id:
+            # Always keep the latest customer id (e.g. replaces a stale sandbox
+            # id after switching to production, or a new customer on re-subscribe).
             company.stripe_customer_id = str(customer_id)
         await db.commit()
         logger.info("Paddle webhook %s → company %s status=%s plan=%s",
