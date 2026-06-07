@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "VendorRecon <noreply@vendorrecon.app>"
+    SMTP_FROM: str = "VendorRecon <noreply@vendorrecon.org>"
     SMTP_USE_TLS: bool = True
 
     # ── AI Fallback (Anthropic) ───────────────────────────────────────────────
