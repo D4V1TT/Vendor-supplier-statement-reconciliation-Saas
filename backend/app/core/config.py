@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     PADDLE_WEBHOOK_SECRET: str = ""   # notification destination secret (pdl_ntfset_...)
     PADDLE_ENV: str = "production"    # "sandbox" or "production" → picks the API base URL
 
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    # Static key for admin-only endpoints (e.g. manually setting a company's
+    # plan). Sent as the X-Admin-Key header. Leave blank to disable the endpoint.
+    ADMIN_API_KEY: str = ""
+
     # ── Plan limits ───────────────────────────────────────────────────────────
     # Free tier: max reconciliations per calendar month. Paid plans = unlimited.
     FREE_MONTHLY_RECON_LIMIT: int = 5
