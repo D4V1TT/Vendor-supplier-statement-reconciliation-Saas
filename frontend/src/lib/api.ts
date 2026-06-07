@@ -189,7 +189,7 @@ export const api = {
   getUsage: () =>
     request<ReconUsage>("/usage"),
 
-  // Stripe billing — returns a hosted URL to redirect the user to
+  // Billing (Lemon Squeezy) — returns a hosted URL to redirect the user to
   startCheckout: () =>
     request<{ url: string }>("/billing/checkout", { method: "POST" }),
 

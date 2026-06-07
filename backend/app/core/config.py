@@ -63,10 +63,12 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
 
-    # ── Stripe (subscriptions) ────────────────────────────────────────────────
-    STRIPE_SECRET_KEY: str = ""        # sk_test_… / sk_live_…
-    STRIPE_WEBHOOK_SECRET: str = ""    # whsec_… (from the webhook endpoint)
-    STRIPE_PRICE_PRO: str = ""         # price_… for the Pro plan
+    # ── Lemon Squeezy (subscriptions — Merchant of Record) ────────────────────
+    # Stripe isn't available in Georgia, so we use Lemon Squeezy as the MoR.
+    LEMONSQUEEZY_API_KEY: str = ""         # LS → Settings → API
+    LEMONSQUEEZY_STORE_ID: str = ""        # numeric store id (LS → Settings → Stores)
+    LEMONSQUEEZY_VARIANT_PRO: str = ""     # variant id of the monthly Pro plan
+    LEMONSQUEEZY_WEBHOOK_SECRET: str = ""  # signing secret set when creating the webhook
 
     # ── Plan limits ───────────────────────────────────────────────────────────
     # Free tier: max reconciliations per calendar month. Paid plans = unlimited.

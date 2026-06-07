@@ -151,7 +151,7 @@ export default function SettingsPage() {
     setBillingBusy(true);
     try {
       const { url } = await api.startCheckout();
-      window.location.href = url;        // redirect to Stripe Checkout
+      window.location.href = url;        // redirect to Lemon Squeezy checkout
     } catch (e: any) {
       alert(e.message ?? "Could not start checkout.");
       setBillingBusy(false);
@@ -162,7 +162,7 @@ export default function SettingsPage() {
     setBillingBusy(true);
     try {
       const { url } = await api.openBillingPortal();
-      window.location.href = url;        // redirect to Stripe portal
+      window.location.href = url;        // redirect to Lemon Squeezy customer portal
     } catch (e: any) {
       alert(e.message ?? "Could not open billing portal.");
       setBillingBusy(false);
