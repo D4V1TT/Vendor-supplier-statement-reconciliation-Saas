@@ -151,25 +151,46 @@ export default function SettingsPage() {
     setEmail(user.primaryEmailAddress?.emailAddress ?? "");
   }, [isLoaded, user]);
 
-  // Load the real company name from our backend (Company table)
+  // Load the real company name from our backend (Company table). Retries so the
+  // company_id (needed for checkout) survives a transient token race on mount.
   useEffect(() => {
-    api.getCompany()
-      .then(c => { setCompanyName(c.name); setCompanyId(c.id); })
-      .catch(() => { /* leave blank if not reachable yet */ });
+    let cancelled = false;
+    const load = async (attempt = 0) => {
+      try {
+        const c = await api.getCompany();
+        if (cancelled) return;
+        setCompanyName(c.name);
+        setCompanyId(c.id);
+      } catch {
+        if (!cancelled && attempt < 3) setTimeout(() => load(attempt + 1), 600 * (attempt + 1));
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
-  // Load company-wide reconciliation settings
+  // Load company-wide reconciliation settings. Retries on failure, and falls
+  // back to "free" after a few tries so the plan never freezes on "Checking…".
   useEffect(() => {
-    api.getSettings()
-      .then(st => {
+    let cancelled = false;
+    const load = async (attempt = 0) => {
+      try {
+        const st = await api.getSettings();
+        if (cancelled) return;
         setCurrency(CURRENCY_TO_LABEL[st.default_currency] ?? "USD — US Dollar");
         setTolerance(String(st.amount_tolerance));
         setPdfMethod(METHOD_TO_LABEL[st.pdf_extraction_method] ?? "Auto (recommended)");
         setFlagCredits(st.flag_unapplied_credits);
         setAutoExport(st.auto_export);
         setPlan((st as any).plan ?? "free");
-      })
-      .catch(() => { /* keep defaults */ });
+      } catch {
+        if (cancelled) return;
+        if (attempt < 3) setTimeout(() => load(attempt + 1), 600 * (attempt + 1));
+        else setPlan("free"); // stop the "Checking…" skeleton from sticking forever
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   // Initialize Paddle.js once the CDN script is available (idempotent).
