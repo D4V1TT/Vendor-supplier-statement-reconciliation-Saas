@@ -314,11 +314,15 @@ export default function LandingPage() {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-100 py-8">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-slate-400">© 2026 VendorRecon. All data encrypted at rest.</p>
-          <div className="flex gap-5">
+          <div className="flex flex-wrap gap-5">
+            <a href="/pricing" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Pricing</a>
+            <a href="/terms" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Terms</a>
+            <a href="/privacy" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Privacy</a>
+            <a href="/refund" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Refunds</a>
+            <a href="/contact" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Contact</a>
             <a href="/login" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Sign in</a>
-            <a href="#sandbox" className="text-xs text-slate-400 hover:text-slate-700 transition-colors">Demo</a>
           </div>
         </div>
       </footer>
