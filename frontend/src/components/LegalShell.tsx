@@ -5,6 +5,7 @@ export const CONTACT_EMAIL = "vendorreconorg@gmail.com";
 
 export const FOOTER_LINKS = [
   { href: "/pricing", label: "Pricing" },
+  { href: "/guide/vendor-statement-reconciliation", label: "Guide" },
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
   { href: "/refund", label: "Refunds" },
@@ -67,4 +68,42 @@ export function PublicFooter() {
 /** Section heading used inside legal page bodies. */
 export function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="text-lg font-bold text-slate-900 pt-4">{children}</h2>;
+}
+
+/** Readable body paragraph for guide/article pages. */
+export function Para({ children }: { children: React.ReactNode }) {
+  return <p className="text-[15px] leading-7 text-slate-600">{children}</p>;
+}
+
+/** Shared call-to-action box for guide pages. */
+export function GuideCTA() {
+  return (
+    <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-6 mt-6">
+      <p className="font-bold text-slate-900">Reconcile your first statement free</p>
+      <p className="text-sm text-slate-600 mt-1">
+        Upload a real vendor statement and your AP ledger and see the exceptions in seconds — no credit card needed.
+      </p>
+      <a href="/signup"
+         className="mt-4 inline-block rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors">
+        Start free
+      </a>
+      <span className="ml-3 text-xs text-slate-400">or see <a href="/pricing" className="text-indigo-600 underline">pricing</a></span>
+    </div>
+  );
+}
+
+/** Related-guides link list for cross-linking the content cluster. */
+export function RelatedGuides({ links }: { links: { href: string; label: string }[] }) {
+  return (
+    <div className="pt-6 mt-6 border-t border-slate-100">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Related guides</p>
+      <ul className="mt-3 space-y-1.5">
+        {links.map((l) => (
+          <li key={l.href}>
+            <a href={l.href} className="text-[15px] text-indigo-600 hover:text-indigo-700 underline">{l.label}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }

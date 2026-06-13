@@ -1,4 +1,4 @@
-import { LegalShell, H2 } from "@/components/LegalShell";
+import { LegalShell, H2, RelatedGuides } from "@/components/LegalShell";
 
 export const metadata = {
   title: "What Is Vendor Statement Reconciliation? A Complete Guide — VendorRecon",
@@ -119,6 +119,12 @@ export default function GuidePage() {
         </a>
         <span className="ml-3 text-xs text-slate-400">or see <a href="/pricing" className="text-indigo-600 underline">pricing</a></span>
       </div>
+
+      <RelatedGuides links={[
+        { href: "/guide/reconcile-vendor-statement-in-excel", label: "How to reconcile a vendor statement in Excel" },
+        { href: "/guide/supplier-statement-reconciliation-checklist", label: "Supplier statement reconciliation checklist" },
+        { href: "/guide/duplicate-invoice-detection", label: "How to catch duplicate invoices (and stop double payments)" },
+      ]} />
     </LegalShell>
   );
 }
