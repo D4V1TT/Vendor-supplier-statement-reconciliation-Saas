@@ -25,6 +25,68 @@ const FEATURES = [
   "Supports PDF, Excel, CSV — any vendor format",
 ];
 
+const FAQ = [
+  {
+    q: "What is vendor statement reconciliation?",
+    a: "Vendor statement reconciliation is the process of matching a supplier's statement of account against your own accounts-payable ledger to confirm every invoice, credit, and payment agrees. It surfaces amount mismatches, missing or duplicate invoices, and unapplied credits before you pay.",
+  },
+  {
+    q: "How does VendorRecon work?",
+    a: "Upload your vendor's statement (PDF, Excel, or CSV) and your AP ledger export. VendorRecon normalizes the formatting, matches each line by invoice ID and amount, and produces an exceptions report in seconds.",
+  },
+  {
+    q: "What file formats are supported?",
+    a: "PDF (including scanned statements via OCR), Excel (.xlsx/.xls), CSV, TSV, and ODS. On the Pro plan, AI extraction handles messy or non-standard layouts.",
+  },
+  {
+    q: "What discrepancies does it catch?",
+    a: "Amount mismatches, invoices missing from your ledger, duplicate (double-billed) invoices, unapplied credit notes, and ledger entries missing from the vendor statement.",
+  },
+  {
+    q: "Is my financial data secure?",
+    a: "Yes. Files are encrypted at rest with AES-256 and sent over HTTPS, and you can delete your data at any time from your account settings.",
+  },
+  {
+    q: "How much does VendorRecon cost?",
+    a: "There is a free plan for occasional reconciliations, and a Pro plan at $99/month with unlimited reconciliations and AI extraction for tough files.",
+  },
+];
+
+// Structured data (schema.org) — helps Google understand the product + pricing
+// and makes the FAQ eligible for rich results in search.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "VendorRecon",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: "https://vendorrecon.org",
+      description:
+        "Reconcile vendor and supplier statements against your accounts-payable ledger in seconds. Automatically catch amount mismatches, missing invoices, duplicate billing, and unapplied credits.",
+      offers: [
+        { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD" },
+        { "@type": "Offer", name: "Pro", price: "99", priceCurrency: "USD" },
+      ],
+    },
+    {
+      "@type": "Organization",
+      name: "VendorRecon",
+      url: "https://vendorrecon.org",
+      logo: "https://vendorrecon.org/icon",
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
+  ],
+};
+
 const catColor: Record<string, string> = {
   "Flagged_Amount_Mismatch":      "bg-red-50 text-red-700 ring-red-200",
   "Flagged_Missing_In_Ledger":    "bg-amber-50 text-amber-700 ring-amber-200",
@@ -86,6 +148,12 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
+
+      {/* Structured data for search engines */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
 
       {/* ── Nav ────────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-sm">
@@ -309,6 +377,23 @@ export default function LandingPage() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ── FAQ ────────────────────────────────────────────────────────────── */}
+      <section className="bg-slate-50 border-t border-slate-100 py-20">
+        <div className="max-w-3xl mx-auto px-6">
+          <h2 className="text-3xl font-extrabold text-slate-900 text-center">
+            Vendor statement reconciliation FAQ
+          </h2>
+          <dl className="mt-10 space-y-4">
+            {FAQ.map((f) => (
+              <div key={f.q} className="rounded-2xl border border-slate-200 bg-white p-6">
+                <dt className="font-bold text-slate-900">{f.q}</dt>
+                <dd className="mt-2 text-sm text-slate-600 leading-relaxed">{f.a}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
