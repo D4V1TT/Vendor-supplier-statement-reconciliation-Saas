@@ -27,7 +27,7 @@ export default function ContactPage() {
 
       <H2>Business details</H2>
       <p>
-        VendorRecon is an independent software service operated from Georgia. Reach us at the email above for
+        VendorRecon is an independent software service. Reach us at the email above for
         any formal or legal correspondence.
       </p>
     </LegalShell>
