@@ -394,6 +394,12 @@ export default function LandingPage() {
               </div>
             ))}
           </dl>
+          <p className="mt-8 text-center text-sm">
+            <a href="/guide/vendor-statement-reconciliation"
+               className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+              Read the complete guide to vendor statement reconciliation →
+            </a>
+          </p>
         </div>
       </section>
 

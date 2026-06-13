@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const routes: { path: string; priority: number; freq: "weekly" | "monthly" }[] = [
     { path: "",         priority: 1.0, freq: "weekly" },
     { path: "/pricing", priority: 0.9, freq: "weekly" },
+    { path: "/guide/vendor-statement-reconciliation", priority: 0.8, freq: "monthly" },
     { path: "/contact", priority: 0.5, freq: "monthly" },
     { path: "/terms",   priority: 0.4, freq: "monthly" },
     { path: "/privacy", priority: 0.4, freq: "monthly" },
