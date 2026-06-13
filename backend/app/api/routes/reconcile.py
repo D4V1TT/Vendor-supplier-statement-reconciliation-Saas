@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,6 +116,27 @@ from app.schemas.api_schemas import (
 from app.workers.tasks import enqueue_reconciliation_job
 
 router = APIRouter(tags=["reconciliation"])
+
+TERMS_VERSION = "2026-06-08"  # bump when the Terms / Privacy Policy are materially updated
+
+
+@router.post("/terms/accept")
+async def accept_terms(
+    request:      Request,
+    current_user: User         = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Record proof that the user accepted the Terms of Service & Privacy Policy."""
+    user = await db.get(User, current_user.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else None)
+    user.terms_accepted_at = datetime.now(timezone.utc)
+    user.terms_version     = TERMS_VERSION
+    user.terms_accepted_ip = ip
+    await db.commit()
+    return {"accepted_at": user.terms_accepted_at.isoformat(), "version": TERMS_VERSION}
 
 
 # ── Danger Zone: delete all reconciliation data ───────────────────────────────

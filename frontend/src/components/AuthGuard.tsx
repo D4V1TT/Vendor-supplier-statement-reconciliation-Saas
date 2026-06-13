@@ -3,6 +3,7 @@
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 function Spinner() {
   return (
@@ -32,6 +33,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!checked || !user || saving) return;
     setSaving(true);
     try {
+      await api.acceptTerms();  // durable proof of consent recorded in our database
       await user.update({
         unsafeMetadata: {
           ...(user.unsafeMetadata ?? {}),

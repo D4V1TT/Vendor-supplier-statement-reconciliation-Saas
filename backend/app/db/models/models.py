@@ -8,11 +8,13 @@ every query — Row-Level Security is also enabled at the PostgreSQL level
 """
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Boolean,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -104,6 +106,11 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     notify_on_completion: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_exceptions: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_weekly_digest: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Proof of Terms/Privacy acceptance, recorded server-side when the user agrees.
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terms_version:     Mapped[str | None]      = mapped_column(String(40), nullable=True)
+    terms_accepted_ip: Mapped[str | None]      = mapped_column(String(64), nullable=True)
 
     company: Mapped["Company"] = relationship("Company", back_populates="users")
 

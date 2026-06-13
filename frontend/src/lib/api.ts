@@ -194,6 +194,10 @@ export const api = {
   openBillingPortal: () =>
     request<{ url: string }>("/billing/portal", { method: "POST" }),
 
+  // Record server-side proof that the user accepted the Terms & Privacy Policy.
+  acceptTerms: () =>
+    request<{ accepted_at: string; version: string }>("/terms/accept", { method: "POST" }),
+
   deleteAllData: () =>
     request<{ status: string; deleted: Record<string, number> }>("/company/data", {
       method: "DELETE",
