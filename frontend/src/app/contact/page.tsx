@@ -1,6 +1,6 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Contact — VendorRecon" };
+export const metadata = { title: "Contact — VendorRecon", alternates: { canonical: "/contact" } };
 
 export default function ContactPage() {
   return (

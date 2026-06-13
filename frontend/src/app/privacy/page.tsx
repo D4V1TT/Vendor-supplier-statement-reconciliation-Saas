@@ -1,6 +1,6 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Privacy Policy — VendorRecon" };
+export const metadata = { title: "Privacy Policy — VendorRecon", alternates: { canonical: "/privacy" } };
 
 export default function PrivacyPage() {
   return (

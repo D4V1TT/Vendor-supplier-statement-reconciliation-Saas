@@ -5,6 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://vendorrecon.org"),
+  alternates: { canonical: "/" },
   title: "VendorRecon — AP Statement Reconciliation",
   description:
     "Reconcile vendor & supplier statements against your accounts-payable ledger in seconds — automatically catch amount mismatches, missing invoices, duplicate billing, and unapplied credits.",
