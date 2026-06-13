@@ -82,10 +82,7 @@ export default function TermsPage() {
         updated&quot; date above; continued use constitutes acceptance.
       </p>
 
-      <H2>11. Governing law</H2>
-      <p>These Terms are governed by the laws of Georgia, without regard to conflict-of-laws principles.</p>
-
-      <H2>12. Contact</H2>
+      <H2>11. Contact</H2>
       <p>
         Questions about these Terms? Email{" "}
         <a href={`mailto:${CONTACT_EMAIL}`} className="text-indigo-600 underline">{CONTACT_EMAIL}</a>.
