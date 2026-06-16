@@ -1,7 +1,7 @@
 import React from "react";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 
-export const CONTACT_EMAIL = "vendorreconorg@gmail.com";
+export const CONTACT_EMAIL = "info@vendorrecon.org";
 
 export const FOOTER_LINKS = [
   { href: "/pricing", label: "Pricing" },
