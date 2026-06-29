@@ -1,12 +1,12 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Contact — VendorRecon", alternates: { canonical: "/contact" } };
+export const metadata = { title: "Contact | VendorRecon", alternates: { canonical: "/contact" } };
 
 export default function ContactPage() {
   return (
     <LegalShell title="Contact us" updated="June 2026">
       <p>
-        We&apos;re happy to help with anything — product questions, billing, privacy requests, or general
+        We&apos;re happy to help with anything, product questions, billing, privacy requests, or general
         feedback.
       </p>
 

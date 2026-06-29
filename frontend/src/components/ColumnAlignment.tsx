@@ -4,7 +4,7 @@
  * Cross-file column alignment, shown after BOTH files are uploaded.
  * Aligns the vendor statement's columns against the AP ledger's columns by the
  * canonical field they map to, so the user can see at a glance how the two
- * files correspond — and where they differ (a field present in one, missing in
+ * files correspond, and where they differ (a field present in one, missing in
  * the other).
  *
  *   Vendor Statement        Field            AP Ledger

@@ -1,6 +1,6 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Refund & Cancellation Policy — VendorRecon", alternates: { canonical: "/refund" } };
+export const metadata = { title: "Refund & Cancellation Policy | VendorRecon", alternates: { canonical: "/refund" } };
 
 export default function RefundPage() {
   return (

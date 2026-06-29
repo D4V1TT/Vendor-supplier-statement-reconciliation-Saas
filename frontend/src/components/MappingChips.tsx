@@ -32,7 +32,7 @@ const CANON_LABEL: Record<string, string> = {
 const REQUIRED = new Set(["invoice_id", "amount"]);
 
 export function MappingChips({ detection, confirmed, onEdit }: MappingChipsProps) {
-  // Scanned PDF: no fast preview — extraction (OCR/AI) runs on submit.
+  // Scanned PDF: no fast preview, extraction (OCR/AI) runs on submit.
   if ((detection as any).extraction_deferred) {
     return (
       <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2.5 flex items-start gap-2">
@@ -124,7 +124,7 @@ export function MappingChips({ detection, confirmed, onEdit }: MappingChipsProps
           <p className="text-[10px] font-semibold text-red-600">
             Missing required field{!mappedCanon.has("invoice_id") && !amountOk ? "s" : ""}:{" "}
             {[!mappedCanon.has("invoice_id") && "Invoice ID", !amountOk && "Amount"].filter(Boolean).join(", ")}
-            {" "}— click Edit to map.
+            , click Edit to map.
           </p>
         </div>
       )}

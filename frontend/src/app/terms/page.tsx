@@ -1,6 +1,6 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Terms of Service — VendorRecon", alternates: { canonical: "/terms" } };
+export const metadata = { title: "Terms of Service | VendorRecon", alternates: { canonical: "/terms" } };
 
 export default function TermsPage() {
   return (

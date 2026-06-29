@@ -79,7 +79,7 @@ export default function HistoryPage() {
   }, []);
 
   function fmt(n: number | null) {
-    if (n == null) return "—";
+    if (n == null) return "-";
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
   }
 
@@ -151,12 +151,12 @@ export default function HistoryPage() {
                           {new Date(job.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                         </td>
                         <td className="px-5 py-4 text-slate-500 tabular-nums">
-                          {job.total_supplier_lines ?? "—"}
+                          {job.total_supplier_lines ?? "-"}
                         </td>
                         <td className="px-5 py-4 w-44">
                           {job.status === "completed"
                             ? <MatchBar pct={pct} />
-                            : <span className="text-xs text-slate-300">—</span>
+                            : <span className="text-xs text-slate-300">-</span>
                           }
                         </td>
                         <td className="px-5 py-4 tabular-nums text-xs font-semibold">
@@ -164,7 +164,7 @@ export default function HistoryPage() {
                             ? <span className={(job.total_variance ?? 0) !== 0 ? "text-red-600" : "text-slate-400"}>
                                 {fmt(job.total_variance)}
                               </span>
-                            : <span className="text-slate-300">—</span>
+                            : <span className="text-slate-300">-</span>
                           }
                         </td>
                         <td className="px-5 py-4">

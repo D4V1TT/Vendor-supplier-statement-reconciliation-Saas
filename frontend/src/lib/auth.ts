@@ -1,5 +1,5 @@
 /**
- * Auth helpers — token storage and login/register API calls.
+ * Auth helpers, token storage and login/register API calls.
  */
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";

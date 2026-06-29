@@ -7,7 +7,7 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-// Clerk's getToken is async — we store a reference set once at app boot
+// Clerk's getToken is async, we store a reference set once at app boot
 let _getToken: (() => Promise<string | null>) | null = null;
 
 export function initApiAuth(getToken: () => Promise<string | null>) {
@@ -15,9 +15,9 @@ export function initApiAuth(getToken: () => Promise<string | null>) {
 }
 
 async function authHeader(): Promise<Record<string, string>> {
-  if (!_getToken) throw new Error("Not authenticated — please sign in again.");
+  if (!_getToken) throw new Error("Not authenticated, please sign in again.");
   const token = await _getToken();
-  if (!token) throw new Error("Session expired — please sign in again.");
+  if (!token) throw new Error("Session expired, please sign in again.");
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -189,7 +189,7 @@ export const api = {
   getUsage: () =>
     request<ReconUsage>("/usage"),
 
-  // Billing portal (Paddle) — returns a hosted URL to redirect the user to.
+  // Billing portal (Paddle), returns a hosted URL to redirect the user to.
   // Checkout itself runs client-side via Paddle.js (see settings page).
   openBillingPortal: () =>
     request<{ url: string }>("/billing/portal", { method: "POST" }),
@@ -209,7 +209,7 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  // Public sandbox — no auth, no storage. Runs reconciliation in-memory.
+  // Public sandbox, no auth, no storage. Runs reconciliation in-memory.
   sandboxReconcile: async (statement: File, ledger: File) => {
     const form = new FormData();
     form.append("statement", statement);

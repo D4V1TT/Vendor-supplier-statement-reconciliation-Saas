@@ -1,6 +1,6 @@
 import { LegalShell, H2, CONTACT_EMAIL } from "@/components/LegalShell";
 
-export const metadata = { title: "Privacy Policy — VendorRecon", alternates: { canonical: "/privacy" } };
+export const metadata = { title: "Privacy Policy | VendorRecon", alternates: { canonical: "/privacy" } };
 
 export default function PrivacyPage() {
   return (
@@ -12,11 +12,11 @@ export default function PrivacyPage() {
 
       <H2>Information we collect</H2>
       <p>
-        <strong>Account information</strong> — your name and email, handled by our authentication provider
+        <strong>Account information</strong>: your name and email, handled by our authentication provider
         (Clerk) when you sign in.<br />
-        <strong>Reconciliation data</strong> — the vendor statements and ledger files you upload, and the
+        <strong>Reconciliation data</strong>: the vendor statements and ledger files you upload, and the
         results generated from them.<br />
-        <strong>Usage data</strong> — basic logs needed to operate and secure the service.
+        <strong>Usage data</strong>: basic logs needed to operate and secure the service.
       </p>
 
       <H2>How we use it</H2>

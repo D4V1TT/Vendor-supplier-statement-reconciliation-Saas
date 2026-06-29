@@ -81,7 +81,7 @@ export function GuideCTA() {
     <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-6 mt-6">
       <p className="font-bold text-slate-900">Reconcile your first statement free</p>
       <p className="text-sm text-slate-600 mt-1">
-        Upload a real vendor statement and your AP ledger and see the exceptions in seconds — no credit card needed.
+        Upload a real vendor statement and your AP ledger and see the exceptions in seconds, no credit card needed.
       </p>
       <a href="/signup"
          className="mt-4 inline-block rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors">

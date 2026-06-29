@@ -22,7 +22,7 @@ const FEATURES = [
   "Matches invoices by ID, amount & date in seconds",
   "Flags mismatches, missing invoices & unapplied credits",
   "Exports a clean Excel exceptions report instantly",
-  "Supports PDF, Excel, CSV — any vendor format",
+  "Supports PDF, Excel, CSV, any vendor format",
 ];
 
 const FAQ = [
@@ -52,7 +52,7 @@ const FAQ = [
   },
 ];
 
-// Structured data (schema.org) — helps Google understand the product + pricing
+// Structured data (schema.org), helps Google understand the product + pricing
 // and makes the FAQ eligible for rich results in search.
 const JSON_LD = {
   "@context": "https://schema.org",
@@ -106,7 +106,7 @@ const catLabel: Record<string, string> = {
 };
 
 function fmt(n: number | null) {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
@@ -195,12 +195,12 @@ export default function LandingPage() {
         </h1>
         <p className="mt-6 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
           Upload your vendor's PDF statement and your internal AP ledger.
-          VendorRecon finds every mismatch, missing invoice, and unapplied credit — automatically.
+          VendorRecon finds every mismatch, missing invoice, and unapplied credit, automatically.
         </p>
         <div className="mt-8 flex items-center justify-center gap-4">
           <SignUpButton mode="modal">
             <button className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 active:scale-[0.99]">
-              Start free — no credit card
+              Start free, no credit card
             </button>
           </SignUpButton>
           <a href="#sandbox" className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
@@ -227,7 +227,7 @@ export default function LandingPage() {
             {[
               { n: "01", title: "Upload both files", desc: "Drop your vendor PDF statement and your AP ledger export (CSV, Excel, or any format)." },
               { n: "02", title: "AI matches every line", desc: "Our engine compares each invoice by ID and amount, categorising matches and exceptions automatically." },
-              { n: "03", title: "Download the exceptions report", desc: "Get a clean Excel report with only the lines that need your attention — ready to send to your vendor." },
+              { n: "03", title: "Download the exceptions report", desc: "Get a clean Excel report with only the lines that need your attention, ready to send to your vendor." },
             ].map(s => (
               <div key={s.n} className="flex gap-4">
                 <span className="text-3xl font-black text-indigo-100 leading-none flex-shrink-0">{s.n}</span>
@@ -304,7 +304,7 @@ export default function LandingPage() {
 
             /* ── Demo Result (blurred preview + CTA) ────────────────────── */
             <div id="demo-result" className="animate-fade-up">
-              {/* Summary bar — REAL counts from the uploaded files */}
+              {/* Summary bar, REAL counts from the uploaded files */}
               <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
                 {[
                   { label: "Amount Mismatches", value: summary?.count_amount_mismatch ?? 0,   color: "text-red-600" },
@@ -318,7 +318,7 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              {/* Blurred table — REAL exception rows */}
+              {/* Blurred table, REAL exception rows */}
               <div className="relative overflow-hidden min-h-[240px]">
                 <table className="w-full text-sm select-none">
                   <thead className="bg-slate-50 border-b border-slate-100">
@@ -334,7 +334,7 @@ export default function LandingPage() {
                         <td className="px-5 py-3.5 font-mono font-bold text-slate-800 text-xs">{r?.invoice_id ?? "INV-0000"}</td>
                         <td className="px-5 py-3.5 tabular-nums font-medium">{fmt(r?.supplier_amount ?? 0)}</td>
                         <td className="px-5 py-3.5 tabular-nums text-slate-400">{fmt(r?.ledger_amount ?? null)}</td>
-                        <td className="px-5 py-3.5 tabular-nums font-bold text-red-600">{r?.variance != null ? `${r.variance > 0 ? "+" : ""}${fmt(r.variance)}` : "—"}</td>
+                        <td className="px-5 py-3.5 tabular-nums font-bold text-red-600">{r?.variance != null ? `${r.variance > 0 ? "+" : ""}${fmt(r.variance)}` : "-"}</td>
                         <td className="px-5 py-3.5">
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${catColor[r?.category] ?? "bg-slate-50 text-slate-500 ring-slate-200"}`}>
                             {catLabel[r?.category] ?? "Exception"}
@@ -363,7 +363,7 @@ export default function LandingPage() {
                     </div>
                     <SignUpButton mode="modal">
                       <button className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm">
-                        Sign up free — see full report
+                        Sign up free, see full report
                       </button>
                     </SignUpButton>
                     <button

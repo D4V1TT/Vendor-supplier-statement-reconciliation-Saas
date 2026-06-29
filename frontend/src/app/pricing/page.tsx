@@ -1,7 +1,7 @@
 import { PublicFooter } from "@/components/LegalShell";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 
-export const metadata = { title: "Pricing — VendorRecon", alternates: { canonical: "/pricing" } };
+export const metadata = { title: "Pricing | VendorRecon", alternates: { canonical: "/pricing" } };
 
 const FREE = [
   "CSV, Excel & clean-PDF reconciliation",

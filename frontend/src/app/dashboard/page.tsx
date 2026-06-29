@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
       const detection: DetectionResult & { extraction_deferred?: boolean } = await res.json();
 
-      // Scanned PDF: no fast preview available — extraction runs on submit.
+      // Scanned PDF: no fast preview available, extraction runs on submit.
       if (detection.extraction_deferred) {
         if (target === "statement") setStmtDetection(detection);
         else                        setLedgerDetection(detection);
@@ -251,7 +251,7 @@ export default function DashboardPage() {
             }`}>
               <span>
                 <b className="font-semibold">{usage.used}/{usage.limit}</b> free reconciliations used this month
-                {(usage.remaining ?? 0) <= 0 && " — limit reached"}
+                {(usage.remaining ?? 0) <= 0 && ", limit reached"}
               </span>
               <a href="/settings" className="font-semibold text-indigo-600 hover:text-indigo-800 transition-colors whitespace-nowrap">
                 Upgrade to Pro →
@@ -308,7 +308,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Cross-file column alignment — shown once BOTH files are detected
+              {/* Cross-file column alignment, shown once BOTH files are detected
                   with usable mappings (skip when a PDF's extraction is deferred). */}
               {stmtDetection && ledgerDetection &&
                !(stmtDetection as any).extraction_deferred &&
@@ -404,9 +404,9 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <>
-                      <ExceptionsTable title="Duplicate Invoices" description="Same invoice ID billed more than once on one side — possible double-billing" items={report.duplicates.items} color="red" icon={Icons.warning} />
+                      <ExceptionsTable title="Duplicate Invoices" description="Same invoice ID billed more than once on one side, possible double-billing" items={report.duplicates.items} color="red" icon={Icons.warning} />
                       <ExceptionsTable title="Amount Mismatches" description="Invoices found in both sources but with differing amounts" items={report.amount_mismatches.items} color="red" icon={Icons.warning} />
-                      <ExceptionsTable title="Likely Matches — verify" description="Invoice IDs nearly match (OCR / format difference) and amounts agree — confirm they're the same invoice" items={report.likely_matches.items} color="blue" icon={Icons.check} />
+                      <ExceptionsTable title="Likely Matches: verify" description="Invoice IDs nearly match (OCR / format difference) and amounts agree, confirm they're the same invoice" items={report.likely_matches.items} color="blue" icon={Icons.check} />
                       <ExceptionsTable title="Missing in Ledger" description="Invoices present on vendor statement but absent from internal AP ledger" items={report.missing_in_ledger.items} color="amber" icon={Icons.missing} />
                       <ExceptionsTable title="Missing in Statement" description="Invoices/credits in your AP ledger but absent from the vendor statement" items={report.missing_in_statement.items} color="slate" icon={Icons.table} />
                       <ExceptionsTable title="Unapplied Credits" description="Credit notes on vendor statement not deducted in internal ledger" items={report.unapplied_credits.items} color="violet" icon={Icons.credit} />

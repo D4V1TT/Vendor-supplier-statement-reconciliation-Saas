@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Column Mapper — shown when auto-detection confidence is low.
+ * Column Mapper, shown when auto-detection confidence is low.
  * Lets the user confirm or correct which file columns map to
  * invoice_id, amount, invoice_date, and balance_due.
  */
@@ -17,7 +17,7 @@ export interface DetectionResult {
   missing_required:        string[];
   method:                  string;
   sample_rows:             Record<string, unknown>[];
-  extraction_deferred?:    boolean;   // scanned PDF — full extraction runs on submit
+  extraction_deferred?:    boolean;   // scanned PDF, full extraction runs on submit
   message?:                string;
 }
 
@@ -84,7 +84,7 @@ export function ColumnMapper({ label, detection, onConfirm, onCancel }: ColumnMa
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-amber-900">Confirm column mapping — {label}</p>
+          <p className="text-sm font-bold text-amber-900">Confirm column mapping: {label}</p>
           <p className="text-xs text-amber-600 mt-0.5">
             We detected the columns below automatically
             {detection.method !== "keyword" ? ` using ${detection.method} analysis` : ""}.
@@ -116,7 +116,7 @@ export function ColumnMapper({ label, detection, onConfirm, onCancel }: ColumnMa
                       : "border-slate-200 bg-slate-50"
                     }`}
                 >
-                  <option value="">— not in this file —</option>
+                  <option value="">(not in this file)</option>
                   {detection.raw_columns.map(col => (
                     <option key={col} value={col}>{col}</option>
                   ))}
@@ -148,7 +148,7 @@ export function ColumnMapper({ label, detection, onConfirm, onCancel }: ColumnMa
                   <tr key={i}>
                     {detection.raw_columns.map(col => (
                       <td key={col} className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
-                        {String(row[col] ?? "—")}
+                        {String(row[col] ?? "-")}
                       </td>
                     ))}
                   </tr>

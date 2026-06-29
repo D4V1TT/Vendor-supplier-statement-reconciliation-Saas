@@ -174,7 +174,7 @@ export function ExceptionsTable({ title, description, items, color, icon }: Exce
 
                   {/* Date */}
                   <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                    {item.invoice_date ?? <span className="text-slate-200">—</span>}
+                    {item.invoice_date ?? <span className="text-slate-200">-</span>}
                   </td>
 
                   {/* Supplier Amount */}
@@ -202,13 +202,13 @@ export function ExceptionsTable({ title, description, items, color, icon }: Exce
                         {item.variance > 0 ? "+" : ""}{fmt(item.variance)}
                       </span>
                     ) : (
-                      <span className="text-slate-200">—</span>
+                      <span className="text-slate-200">-</span>
                     )}
                   </td>
 
                   {/* Notes */}
                   <td className="px-4 py-3 text-xs text-slate-400 max-w-xs">
-                    <span className="line-clamp-2">{item.notes || "—"}</span>
+                    <span className="line-clamp-2">{item.notes || "-"}</span>
                   </td>
                 </tr>
               ))}

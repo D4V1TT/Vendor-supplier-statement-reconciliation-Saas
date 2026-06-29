@@ -9,7 +9,7 @@ interface MatchedTableProps {
 }
 
 function fmt(n: number | null) {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
@@ -45,7 +45,7 @@ export function MatchedTable({ jobId, matchedCount }: MatchedTableProps) {
         <div className="flex-1">
           <p className="text-sm font-bold text-slate-800">Matched Lines</p>
           <p className="text-xs text-slate-400">
-            {matchedCount} invoice{matchedCount !== 1 ? "s" : ""} matched exactly — no action needed
+            {matchedCount} invoice{matchedCount !== 1 ? "s" : ""} matched exactly, no action needed
           </p>
         </div>
         <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
@@ -92,7 +92,7 @@ export function MatchedTable({ jobId, matchedCount }: MatchedTableProps) {
                   {item.invoice_id}
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                  {item.invoice_date ?? <span className="text-slate-200">—</span>}
+                  {item.invoice_date ?? <span className="text-slate-200">-</span>}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums whitespace-nowrap">
                   {fmt(item.supplier_amount)}

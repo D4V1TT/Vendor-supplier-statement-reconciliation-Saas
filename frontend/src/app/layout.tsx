@@ -7,9 +7,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://vendorrecon.org"),
   alternates: { canonical: "/" },
-  title: "VendorRecon — AP Statement Reconciliation",
+  title: "VendorRecon: AP Statement Reconciliation",
   description:
-    "Reconcile vendor & supplier statements against your accounts-payable ledger in seconds — automatically catch amount mismatches, missing invoices, duplicate billing, and unapplied credits.",
+    "Reconcile vendor & supplier statements against your accounts-payable ledger in seconds, automatically catch amount mismatches, missing invoices, duplicate billing, and unapplied credits.",
   applicationName: "VendorRecon",
   keywords: [
     "statement reconciliation",
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://vendorrecon.org",
     siteName: "VendorRecon",
-    title: "VendorRecon — AP Statement Reconciliation",
+    title: "VendorRecon: AP Statement Reconciliation",
     description:
       "Reconcile vendor statements against your AP ledger in seconds. Catch mismatches, missing invoices, duplicates, and unapplied credits.",
   },
   twitter: {
     card: "summary",
-    title: "VendorRecon — AP Statement Reconciliation",
+    title: "VendorRecon: AP Statement Reconciliation",
     description: "Reconcile vendor statements against your AP ledger in seconds.",
   },
   robots: { index: true, follow: true },

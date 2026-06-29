@@ -30,8 +30,8 @@ declare global {
 
 // ── Label ↔ backend-value maps ────────────────────────────────────────────────
 const CURRENCY_OPTIONS = [
-  "USD — US Dollar", "GBP — British Pound", "EUR — Euro",
-  "AED — UAE Dirham", "SAR — Saudi Riyal", "CAD — Canadian Dollar", "AUD — Australian Dollar",
+  "USD - US Dollar", "GBP - British Pound", "EUR - Euro",
+  "AED - UAE Dirham", "SAR - Saudi Riyal", "CAD - Canadian Dollar", "AUD - Australian Dollar",
 ];
 const LABEL_TO_CURRENCY: Record<string, string> = Object.fromEntries(
   CURRENCY_OPTIONS.map(l => [l, l.split(" ")[0]])
@@ -119,14 +119,14 @@ function Select({ options, value, onChange }: { options: string[]; value: string
 export default function SettingsPage() {
   const { user, isLoaded } = useUser();
 
-  // Profile state — seeded from Clerk once loaded
+  // Profile state, seeded from Clerk once loaded
   const [fullName,  setFullName]  = useState("");
   const [email,     setEmail]     = useState("");
   const [newPassword, setNewPassword] = useState("");
 
   // Company / prefs state
   const [companyName, setCompanyName] = useState("");
-  const [currency,    setCurrency]    = useState("USD — US Dollar");
+  const [currency,    setCurrency]    = useState("USD - US Dollar");
   const [tolerance,   setTolerance]   = useState("0.01");
   const [pdfMethod,   setPdfMethod]   = useState("Auto (recommended)");
 
@@ -177,7 +177,7 @@ export default function SettingsPage() {
       try {
         const st = await api.getSettings();
         if (cancelled) return;
-        setCurrency(CURRENCY_TO_LABEL[st.default_currency] ?? "USD — US Dollar");
+        setCurrency(CURRENCY_TO_LABEL[st.default_currency] ?? "USD - US Dollar");
         setTolerance(String(st.amount_tolerance));
         setPdfMethod(METHOD_TO_LABEL[st.pdf_extraction_method] ?? "Auto (recommended)");
         setFlagCredits(st.flag_unapplied_credits);
@@ -214,7 +214,7 @@ export default function SettingsPage() {
 
   function handleUpgrade() {
     if (!paddleReady || !window.Paddle) {
-      alert("Checkout is still loading — please try again in a moment.");
+      alert("Checkout is still loading, please try again in a moment.");
       return;
     }
     if (!PADDLE_TOKEN || !PADDLE_PRICE) {
@@ -365,7 +365,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Profile */}
-            <Section title="Profile" desc="Your personal account details — synced with your sign-in provider.">
+            <Section title="Profile" desc="Your personal account details, synced with your sign-in provider.">
               {/* Avatar */}
               <div className="flex items-center gap-4 pb-2">
                 {user?.imageUrl ? (
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">{fullName || "—"}</p>
+                  <p className="text-sm font-semibold text-slate-800">{fullName || "-"}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{email}</p>
                   {user?.externalAccounts?.[0] && (
                     <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -393,7 +393,7 @@ export default function SettingsPage() {
               <Field label="Email address" hint="Managed by your sign-in provider">
                 <TextInput value={email} disabled />
               </Field>
-              <Field label="New password" hint="Minimum 8 characters — leave blank to keep current">
+              <Field label="New password" hint="Minimum 8 characters, leave blank to keep current">
                 <TextInput
                   type="password"
                   value={newPassword}
