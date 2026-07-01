@@ -129,6 +129,8 @@ export function Sidebar() {
           <a href="/pricing" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">Pricing</a>
           <a href="/terms" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">Terms</a>
           <a href="/privacy" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">Privacy</a>
+          <a href="/dpa" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">DPA</a>
+          <a href="/refund" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">Refunds</a>
           <a href="/contact" className="text-[10px] text-slate-300 hover:text-slate-500 transition-colors">Contact</a>
         </div>
       </div>
