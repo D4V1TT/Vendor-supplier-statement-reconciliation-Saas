@@ -4,7 +4,7 @@ export const metadata = { title: "Terms of Service | VendorRecon", alternates: {
 
 export default function TermsPage() {
   return (
-    <LegalShell title="Terms of Service" updated="June 2026">
+    <LegalShell title="Terms of Service" updated="July 2026">
       <p>
         These Terms of Service (&quot;Terms&quot;) govern your access to and use of VendorRecon
         (&quot;VendorRecon&quot;, &quot;we&quot;, &quot;us&quot;), a vendor/supplier statement
@@ -45,9 +45,13 @@ export default function TermsPage() {
       <H2>5. Your data</H2>
       <p>
         You retain all rights to the data you upload. You grant us a limited licence to process it solely to
-        provide the service. We handle data as described in our{" "}
-        <a href="/privacy" className="text-indigo-600 underline">Privacy Policy</a>. You can delete your data
-        at any time from your account settings.
+        provide the service, as described in our{" "}
+        <a href="/privacy" className="text-indigo-600 underline">Privacy Policy</a>. You represent that you
+        have the right and any necessary consent to upload the data you submit, including data relating to your
+        own clients or other third parties. You can permanently delete your data at any time from your account
+        settings. If you use VendorRecon to process personal data on behalf of your clients, our{" "}
+        <a href="/dpa" className="text-indigo-600 underline">Data Processing Agreement</a> applies and forms
+        part of these Terms.
       </p>
 
       <H2>6. Intellectual property</H2>
@@ -56,11 +60,14 @@ export default function TermsPage() {
         Terms grant you no rights to our intellectual property beyond using the service.
       </p>
 
-      <H2>7. Disclaimer</H2>
+      <H2>7. Disclaimers and warranties</H2>
       <p>
         VendorRecon is a tool to assist reconciliation and does not constitute accounting, tax, or financial
-        advice. You are responsible for reviewing results before acting on them. We do not warrant that the
-        service will be uninterrupted or error-free.
+        advice. To the maximum extent permitted by law, the service is provided without warranties of any kind,
+        whether express or implied, including any implied warranties of merchantability, fitness for a
+        particular purpose, and non-infringement. We do not warrant that the service will be uninterrupted or
+        error-free, or that the results it produces will be complete or accurate. You are responsible for
+        reviewing and verifying all results before relying on or acting on them.
       </p>
 
       <H2>8. Limitation of liability</H2>
@@ -70,19 +77,27 @@ export default function TermsPage() {
         not exceed the amount you paid us in the 12 months preceding the claim.
       </p>
 
-      <H2>9. Termination</H2>
+      <H2>9. Indemnification</H2>
+      <p>
+        You agree to indemnify and hold VendorRecon harmless from any claims, losses, or expenses (including
+        reasonable legal fees) arising from the data you upload, your use of the service, or your breach of
+        these Terms, including any claim that your data infringes the rights of, or was uploaded without the
+        consent of, a third party.
+      </p>
+
+      <H2>10. Termination</H2>
       <p>
         You may stop using the service and cancel at any time. We may suspend or terminate access for breach
         of these Terms. On termination you may export or delete your data.
       </p>
 
-      <H2>10. Changes</H2>
+      <H2>11. Changes</H2>
       <p>
         We may update these Terms from time to time. Material changes will be reflected by the &quot;Last
         updated&quot; date above; continued use constitutes acceptance.
       </p>
 
-      <H2>11. Contact</H2>
+      <H2>12. Contact</H2>
       <p>
         Questions about these Terms? Email{" "}
         <a href={`mailto:${CONTACT_EMAIL}`} className="text-indigo-600 underline">{CONTACT_EMAIL}</a>.

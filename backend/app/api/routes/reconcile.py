@@ -117,7 +117,7 @@ from app.workers.tasks import enqueue_reconciliation_job
 
 router = APIRouter(tags=["reconciliation"])
 
-TERMS_VERSION = "2026-06-08"  # bump when the Terms / Privacy Policy are materially updated
+TERMS_VERSION = "2026-07-01"  # bump when the Terms / Privacy Policy are materially updated
 
 
 @router.post("/terms/accept")
