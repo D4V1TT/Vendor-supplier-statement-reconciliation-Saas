@@ -87,6 +87,7 @@ export default function PrivacyPage() {
       <H2>Cookies</H2>
       <p>
         We use essential cookies for authentication and session management. We do not use advertising cookies.
+        See our <a href="/cookies" className="text-indigo-600 underline">Cookie Policy</a> for the full list.
       </p>
 
       <H2>Contact</H2>

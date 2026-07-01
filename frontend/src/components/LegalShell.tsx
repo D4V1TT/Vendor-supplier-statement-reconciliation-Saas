@@ -8,6 +8,7 @@ export const FOOTER_LINKS = [
   { href: "/guide/vendor-statement-reconciliation", label: "Guide" },
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
+  { href: "/cookies", label: "Cookies" },
   { href: "/dpa", label: "DPA" },
   { href: "/refund", label: "Refunds" },
   { href: "/contact", label: "Contact" },
